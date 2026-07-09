@@ -5,9 +5,14 @@ spring:
     url: ${SUPABASE_DB_URL}
   jpa:
     open-in-view: false
+    hibernate:
+      ddl-auto: validate
     properties:
       hibernate:
         format_sql: true
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 server:
   port: 8080
