@@ -10,7 +10,7 @@ COPY src ./src
 RUN ./gradlew bootJar --no-daemon
 
 # --- Runtime stage ---
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 COPY --from=build /app/build/libs/*.jar app.jar
