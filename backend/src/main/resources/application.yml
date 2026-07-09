@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: backend
+  datasource:
+    url: ${SUPABASE_DB_URL}
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-minutes: 60
+
+ai:
+  api-key: ${AI_API_KEY}

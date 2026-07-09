@@ -1,0 +1,159 @@
+# CLAUDE.md — AI 여행 일정 플래너
+
+> 이 파일은 모든 세션에서 자동으로 읽힌다. 여기 적힌 규칙과 계약은 별도 지시 없이도 항상 준수한다.
+> 상세 요구사항: `docs/PRD.md` / DB 스키마: `docs/ERD.md` / 데이터 스펙: `docs/data-spec.md`
+> 문서 간 충돌 시 우선순위: **CLAUDE.md > ERD 델타(§5.6) > ERD.md > PRD.md** (최신 결정 반영)
+
+## 1. 프로젝트 개요
+
+AI 기반 여행 일정 플래너. 목적지/기간/예산/취향 입력 → AI가 일자별 동선 생성 →
+지도+타임라인으로 확인 → 드래그로 순서 변경 → **변경된 날짜만 부분 재생성**(다른 날짜는 절대 수정 금지) → 저장/재열람.
+포트폴리오 목적, 10일 개발, AI 실비용 $10 이내. 확장성 고려하지 않음(단일 인스턴스).
+
+## 2. 기술 스택 (확정 — 변경 금지)
+
+| 영역 | 스택 |
+|---|---|
+| 프론트엔드 | React 18 + TypeScript + Vite |
+| 백엔드 | Java 17 + Spring Boot 3 + Spring MVC + Spring Data JPA |
+| DB | Supabase (PostgreSQL) — 단일 저장소, Redis 없음 |
+| 인증 | JWT (access token만, 만료 60분, sessionStorage 저장, refresh token 없음), BCrypt 해시 |
+| 지도 | Google Maps JavaScript API — Marker + Polyline만 사용. **Directions API 사용 금지**(비용) |
+| API 문서 | springdoc-openapi (Swagger UI) |
+| 배포 | 프론트 → Vercel / 백엔드 → Render (Docker 멀티스테이지: gradle build → JRE 17 slim) |
+
+- 프론트 드래그: `@dnd-kit/core` + `@dnd-kit/sortable` / 서버 상태: `@tanstack/react-query` / HTTP: `axios`
+- 지도: `@vis.gl/react-google-maps`, 환경변수 `VITE_GOOGLE_MAPS_API_KEY`
+
+## 3. 저장소 구조 (모노레포)
+
+```
+/
+├── CLAUDE.md
+├── docs/
+│   ├── PRD.md            # 원본 PRD (읽기 전용)
+│   ├── ERD.md            # DB 스키마 (읽기 전용, §5.6 델타 적용해 구현)
+│   └── data-spec.md      # 8.3 JSON 스키마 + lat/lng 확장
+├── frontend/src/
+│   ├── api/              # axios 인스턴스, 엔드포인트당 1함수
+│   ├── components/       # 공용 컴포넌트 (DestinationPicker, DayMap, ActivityCard 등)
+│   ├── pages/            # 라우트 단위 페이지
+│   ├── data/
+│   │   └── destinations.ts  # 목적지 큐레이션 정적 데이터 (API 아님, 하드코딩 확정)
+│   ├── styles/tokens.css # 디자인 토큰 (§7)
+│   └── types/            # API 응답 타입 (data-spec과 snake_case 그대로 1:1)
+└── backend/
+    ├── Dockerfile
+    └── src/main/java/com/tripplanner/
+        ├── auth/  ├── trip/  ├── ai/   # ai/ = 프롬프트 빌드·파싱·검증 (핵심)
+        ├── cache/ └── admin/
+```
+
+## 4. API 계약 (PRD 9절 기반 — 절대 준수)
+
+- `POST /api/auth/signup` · `POST /api/auth/login` · `POST /api/auth/logout`
+- `POST /api/trips` — 최초 생성. 요청 바디에 **`include_nearby: boolean` 추가**(근교 포함 토글).
+  캐시 히트 시 캐시 반환. 응답: data-spec 스키마(revision=1)
+- `PATCH /api/trips/{trip_id}/reorder` — `{ "day": 2, "new_activity_order": [...] }`
+  응답: 전체 스키마(해당 day만 `last_modified: true`, revision +1)
+- `GET /api/trips` · `GET /api/trips/{trip_id}`
+- `GET /api/admin/flagged-trips` · `GET /api/admin/stats/destinations`
+- `GET/PUT /api/admin/prompt-templates`, `/api/admin/prompt-templates/{id}`
+- 관리자 API는 `role=admin`만, user는 403
+
+**에러 형식(공통):** `{ "error": "VALIDATION_ERROR|GENERATION_FAILED|AUTH_ERROR|FORBIDDEN|STORAGE_ERROR", "message": "..." }`
+(400 / 502 / 401 / 403 / 503 순 매핑)
+
+**activity 스키마 확장(지도용):** 각 activity에 `lat: number`, `lng: number` 필수 포함.
+AI 생성 시 실제 장소의 근사 좌표를 함께 반환하도록 프롬프트에 명시.
+
+## 5. 핵심 도메인 규칙 (위반 금지)
+
+### 5.1 일자 단위 부분 재생성
+- 재조정 시 AI에는 변경된 day 정보와 새 순서만 전달, "다른 날짜는 원본 그대로"를 프롬프트로 강제
+- **응답 검증**: 요청하지 않은 day가 원본과 다르면(깊은 비교) 위반 → 1회 재시도 → 재실패 시 502
+- 검증 로직은 `ai/PartialRegenerationValidator`로 분리, **단위 테스트 필수**(프로젝트 유일 필수 테스트)
+- 재조정마다 revision +1, `trip_revisions`에 스냅샷 적재
+
+### 5.2 AI 판정 (route_warning)
+- 룰 체크(좌표 기반 이동 거리/순서) + AI 자연어 사유 → `route_warning: { flagged, reason }`
+- 같은 데이터를 사용자 배지와 관리자 flagged-trips가 공통 소비. DB는 `itinerary_days`의 두 컬럼
+- 사용자가 정한 순서는 절대 임의 변경 금지. 이동 시간에 현실만 반영
+
+### 5.3 AI 응답 캐시 (확정 설계 — ERD보다 이 정의가 우선)
+- 캐시 키 = SHA-256( 정규화 결합 문자열 ), 정규화:
+  destination `trim`+소문자 / 날짜 대신 **duration_days** / budget_level `trim`+소문자 /
+  preferences **정렬 후** `,` 결합 / **include_nearby 포함**
+- TTL 30일: 조회 시 `created_at` 30일 초과면 미스 처리 후 새 응답 upsert (lazy expiry, 배치 없음)
+- 최초 생성에만 적용, 재조정 미적용. 캐시 조회 실패 시 AI 직접 호출 폴백
+
+### 5.4 AI 호출 공통
+- 저비용 모델, `max_tokens`/타임아웃은 duration_days 비례 동적 설정
+- 호출 실패/파싱 실패 구분 로깅, 각 1회 재시도
+- 프롬프트는 하드코딩하지 않고 `prompt_templates` 테이블에서 로드 (`initial_generation`, `reorder` 2종)
+
+### 5.5 목적지 선택 (확정 설계)
+- 외부 API 없이 `frontend/src/data/destinations.ts` 정적 데이터로 드릴다운 모달 구현
+- 구조: 좌측 탭 [국내 | 해외] → 우측 지역 리스트 → 지역 클릭 시 상세 리스트(국내: 세부 지역 / 해외: 도시 칩) → 선택 시 모달 닫힘
+- 상세 진입 시 헤더는 뒤로가기 화살표 + breadcrumb("해외 > 일본")
+- 목록에 없는 곳은 목적지 필드에 자유 텍스트 직접 입력 허용 (PRD "제한 없음" 유지)
+- **근교 포함 토글**: 모달이 아닌 생성 폼에서, 목적지 확정 후 필드 아래에 등장.
+  문구는 실제 지명 반영형("교토·고베도 함께 볼까요?" 식), 스위치 토글 UI. 값은 `include_nearby`로 전송
+  (근교 지명 매핑은 destinations.ts의 `nearby` 필드에서 조회, 없으면 "근교 지역도 함께 볼까요?" 폴백)
+
+### 5.6 ERD 델타 (docs/ERD.md에 아래를 추가/수정해 구현)
+1. `itinerary_activities`에 `lat double precision NULL`, `lng double precision NULL` 컬럼 추가
+2. `trips`에 `include_nearby boolean NOT NULL default false` 컬럼 추가
+3. `ai_response_cache.cache_key`의 해시 구성은 ERD 표기(start_date+end_date)가 아니라 §5.3 정의를 따름
+4. `ai_response_cache.expires_at`은 사용하지 않음(NULL 유지) — 만료는 §5.3 lazy expiry로 처리
+
+## 6. 화면 목록 및 확정 UI 결정
+
+| 화면 | 필수 상태 |
+|---|---|
+| 로그인/회원가입 | 브랜드 마크+인사형 헤드라인, 입력 검증 에러, 비밀번호 강도 바, 입력 완료 전 버튼 비활성 톤 |
+| 일정 생성 폼 | 목적지 선택 모달(§5.5), 기간 선택 시 "N박 M일" 자동 배지, 예산 자유 텍스트+빠른 입력 칩, 취향 칩(선택 개수 표시), CTA에 목적지 반영("부산 일정 만들기"), 로딩=단계 체크리스트 |
+| 일정표 | **상단 Google 지도**(마커 번호=타임라인 순번 동일, Polyline 동선, 비효율 구간은 노란 점선) → Day 탭 → 테마+변경됨 배지 → route_warning 참고 배지 → 타임라인 → 하단 [동선 최적화]+[재조정] 버튼 쌍. 드래그 시 지도 동선 동시 갱신 |
+| 저장한 여행 목록 | 카드=목적지 썸네일 블록(목적지 해시 기반 색)+D-day 배지+기간+취향 칩. **revision/수정 횟수 노출 금지**. 빈 상태(아래) |
+| 관리자 3화면 | 상단 요약 지표 카드(생성 수/flagged 수·비율/활성 템플릿) → 모니터링 테이블(행 클릭→상세) → 인기 목적지 막대 → 템플릿 카드(활성 버전 배지, 편집/이력) |
+
+**빈 상태(첫 로그인, 일정 0개) — 문구 고정:**
+중앙 배치, 캐리어 아이콘 + "일정이 존재하지 않네요.\n일정을 만들까요?" + 보조 문구 "목적지만 정해오세요. 동선은 AI가 짤게요." + 파란 버튼 **[AI 추천 일정 만들기]**
+
+**route_warning 배지 — 참고/제안 톤 고정(경고 아님):**
+노란 배경(#FFF7E0) + 전구 아이콘 + "이 순서면 이동 시간이 길어질 수 있어요" + reason 자연어 + 동선 최적화 버튼 연결
+
+## 7. 디자인 시스템 (트리플 레이아웃 벤치마킹, 브랜드 자산 미사용)
+
+`frontend/src/styles/tokens.css`에 CSS 변수로 정의, 컴포넌트에 색상 하드코딩 금지:
+```css
+--color-primary: #0062F4;      /* 확정 메인 컬러 */
+--color-primary-light: #E6F0FE;
+--color-primary-bg: #F5F9FF;    /* 드래그 중 카드/토글 배경 */
+--color-warning-bg: #FFF7E0;  --color-warning-text: #9A6700;
+--color-modified-bg: #E4F4EA; --color-modified-text: #1D7A46;
+--color-error: #E24B4A;
+--color-text: #191F28; --color-text-sub: #5F6B7A; --color-text-muted: #8B95A1;
+--color-bg: #FFFFFF; --color-bg-sub: #F7F8FA; --color-border: #E5E8EB;
+--radius-card: 16px; --radius-container: 20px; --radius-button: 12px; --radius-chip: 999px;
+--shadow-card: 0 1px 4px rgba(0,0,0,0.06);
+```
+- 폰트 Pretendard, 제목 500~700 / 본문 400. 간격은 8px 그리드
+- 버튼: 단색 파랑+흰 글자, 높이 48~52px, 그라데이션/그림자 없음. 보조 버튼은 파란 테두리 아웃라인
+- 타임라인: 좌측 시간+순번 원형 뱃지+세로 연결선, 카드 사이 이동시간 회색 텍스트("🚕 약 25분")
+- 모바일 우선(기준 폭 480px 중앙), 데스크톱은 지도 좌측 고정+타임라인 우측 2단 허용
+
+## 8. 코딩 컨벤션
+
+- 프론트 타입은 data-spec과 snake_case 그대로 1:1 (변환 레이어 없음)
+- 백엔드 DTO는 record + `@JsonProperty` snake_case 매핑
+- 환경변수: 프론트 `VITE_API_BASE_URL`, `VITE_GOOGLE_MAPS_API_KEY` / 백엔드 `SUPABASE_DB_URL`, `JWT_SECRET`, `AI_API_KEY`. 시크릿 하드코딩 금지, `.env.example`만 커밋
+- 커밋: 마일스톤당 1개 이상, `feat/fix/chore: 요약`
+- 자동화 테스트는 §5.1 검증 로직 외 작성하지 않음
+
+## 9. 작업 방식 (토큰 효율 규칙)
+
+- 새 마일스톤 착수 시 **파일 단위 계획 먼저 제시 → 승인 후 구현**
+- 이 파일과 docs/ 내용을 응답에서 반복 설명하지 말 것 — 경로 참조로 대체
+- UI 작업은 2단계: ① 더미 데이터 정적 목업 → 확인 → ② API 연결
+- 마일스톤 완료 시: 커밋 → 해당 DoD 항목 자체 점검 결과만 짧게 보고 → 종료

@@ -1,0 +1,30 @@
+# --- Frontend (Node / Vite) ---
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/*.local
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# --- Backend (Gradle / Spring Boot) ---
+backend/.gradle
+backend/build/
+!backend/gradle/wrapper/gradle-wrapper.jar
+backend/application-local.yml
+backend/application-local.properties
+backend/application-secrets.yml
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/logs/
+
+# --- OS / Editor ---
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# --- Claude Code local state ---
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
