@@ -28,6 +28,11 @@
   gap: 24px;
 }
 
+.tc-error {
+  font-size: 13px;
+  color: var(--color-error);
+}
+
 .tc-field {
   display: flex;
   flex-direction: column;

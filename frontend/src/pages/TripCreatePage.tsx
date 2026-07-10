@@ -1,9 +1,13 @@
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { NEARBY_MAP } from '../data/destinations'
 import { DestinationPickerModal } from '../components/trip/DestinationPickerModal'
 import { BudgetInput } from '../components/trip/BudgetInput'
 import { PreferenceChips } from '../components/trip/PreferenceChips'
 import { GenerationLoadingOverlay } from '../components/trip/GenerationLoadingOverlay'
+import { createTrip } from '../api/trips'
+import { extractErrorMessage } from '../lib/apiError'
 import '../components/trip/tripForm.css'
 import '../components/trip/destinationPicker.css'
 
@@ -23,6 +27,7 @@ function getDurationBadge(startDate: string, endDate: string): string | null {
 }
 
 export default function TripCreatePage() {
+  const navigate = useNavigate()
   const [destination, setDestination] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [includeNearby, setIncludeNearby] = useState(false)
@@ -30,7 +35,17 @@ export default function TripCreatePage() {
   const [endDate, setEndDate] = useState('')
   const [budgetLevel, setBudgetLevel] = useState('')
   const [preferences, setPreferences] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const createTripMutation = useMutation({
+    mutationFn: createTrip,
+    onSuccess: (trip) => {
+      navigate(`/trips/${trip.trip_id}/debug`, { state: { trip } })
+    },
+    onError: (error) => {
+      setErrorMessage(extractErrorMessage(error, '일정 생성에 실패했습니다. 잠시 후 다시 시도해주세요.'))
+    },
+  })
 
   const trimmedDestination = destination.trim()
   const durationBadge = getDurationBadge(startDate, endDate)
@@ -40,6 +55,18 @@ export default function TripCreatePage() {
   function handleSelectDestination(name: string) {
     setDestination(name)
     setModalOpen(false)
+  }
+
+  function handleSubmit() {
+    setErrorMessage(null)
+    createTripMutation.mutate({
+      destination: trimmedDestination,
+      start_date: startDate,
+      end_date: endDate,
+      budget_level: budgetLevel.trim(),
+      preferences,
+      include_nearby: includeNearby,
+    })
   }
 
   return (
@@ -114,7 +141,14 @@ export default function TripCreatePage() {
           <PreferenceChips selected={preferences} onChange={setPreferences} />
         </div>
 
-        <button type="button" className="tc-cta" disabled={!canSubmit} onClick={() => setLoading(true)}>
+        {errorMessage && <p className="tc-error">{errorMessage}</p>}
+
+        <button
+          type="button"
+          className="tc-cta"
+          disabled={!canSubmit || createTripMutation.isPending}
+          onClick={handleSubmit}
+        >
           {trimmedDestination ? `${trimmedDestination} 일정 만들기` : '일정 만들기'}
         </button>
       </div>
@@ -126,9 +160,9 @@ export default function TripCreatePage() {
       />
 
       <GenerationLoadingOverlay
-        visible={loading}
+        visible={createTripMutation.isPending}
         destinationLabel={destination}
-        onComplete={() => setLoading(false)}
+        onComplete={() => {}}
       />
     </div>
   )
