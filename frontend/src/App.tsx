@@ -4,6 +4,7 @@ import SignupPage from './pages/SignupPage'
 import HomePage from './pages/HomePage'
 import TripCreatePage from './pages/TripCreatePage'
 import TripResultDebugPage from './pages/TripResultDebugPage'
+import TripItineraryPage from './pages/TripItineraryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 function App() {
@@ -33,6 +34,14 @@ function App() {
           element={
             <ProtectedRoute>
               <TripResultDebugPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trips/:tripId"
+          element={
+            <ProtectedRoute>
+              <TripItineraryPage />
             </ProtectedRoute>
           }
         />
