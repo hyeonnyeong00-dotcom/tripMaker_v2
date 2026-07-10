@@ -40,14 +40,6 @@ export default function HomePage() {
       >
         일정 생성 폼 미리보기
       </button>
-      <button
-        type="button"
-        className="auth-submit"
-        style={{ marginTop: 12, background: 'transparent', color: 'var(--color-primary)', border: '1px solid var(--color-primary)' }}
-        onClick={() => navigate('/trips/dummy-trip-001')}
-      >
-        일정표 미리보기(더미 데이터)
-      </button>
     </div>
   )
 }

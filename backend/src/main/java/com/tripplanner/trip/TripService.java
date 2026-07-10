@@ -139,18 +139,7 @@ public class TripService {
                 activity.setLng(activityPayload.lng());
                 itineraryActivityRepository.save(activity);
 
-                activityResponses.add(new ActivityResponseDto(
-                        activity.getActivityKey(),
-                        time != null ? time.format(TIME_OUTPUT_FORMATTER) : null,
-                        activity.getTitle(),
-                        activity.getDescription(),
-                        activity.getCategory(),
-                        activity.getDurationMinutes(),
-                        activity.getLocation(),
-                        activity.getEstimatedCost(),
-                        activity.getTips(),
-                        activity.getLat(),
-                        activity.getLng()));
+                activityResponses.add(mapActivity(activity));
             }
 
             dayResponses.add(new DayResponseDto(
@@ -164,6 +153,55 @@ public class TripService {
         saveRevisionSnapshot(trip, dayResponses);
 
         return new TripResponse(trip.getId(), destination, durationDays, payload.summary(), dayResponses, new MetaDto(now, 1));
+    }
+
+    @Transactional(readOnly = true)
+    public TripResponse getTrip(UUID userId, UUID tripId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+
+        if (!trip.getUser().getId().equals(userId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+        }
+
+        List<ItineraryDay> days = itineraryDayRepository.findByTripIdOrderByDayNumberAsc(tripId);
+        List<DayResponseDto> dayResponses = new ArrayList<>();
+        for (ItineraryDay day : days) {
+            List<ItineraryActivity> activities =
+                    itineraryActivityRepository.findByItineraryDayIdOrderByOrderIndexAsc(day.getId());
+            List<ActivityResponseDto> activityResponses = activities.stream().map(this::mapActivity).toList();
+
+            boolean lastModified = day.getLastModifiedAt() != null && day.getLastModifiedAt().isEqual(trip.getUpdatedAt());
+            dayResponses.add(new DayResponseDto(
+                    day.getDayNumber(),
+                    day.getTheme(),
+                    activityResponses,
+                    lastModified,
+                    new RouteWarningDto(day.isRouteWarningFlagged(), day.getRouteWarningReason())));
+        }
+
+        return new TripResponse(
+                trip.getId(),
+                trip.getDestination(),
+                trip.getDurationDays(),
+                trip.getSummary(),
+                dayResponses,
+                new MetaDto(trip.getUpdatedAt(), trip.getRevision()));
+    }
+
+    private ActivityResponseDto mapActivity(ItineraryActivity activity) {
+        return new ActivityResponseDto(
+                activity.getActivityKey(),
+                activity.getTime() != null ? activity.getTime().format(TIME_OUTPUT_FORMATTER) : null,
+                activity.getTitle(),
+                activity.getDescription(),
+                activity.getCategory(),
+                activity.getDurationMinutes(),
+                activity.getLocation(),
+                activity.getEstimatedCost(),
+                activity.getTips(),
+                activity.getLat(),
+                activity.getLng());
     }
 
     private void saveRevisionSnapshot(Trip trip, List<DayResponseDto> dayResponses) {

@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
-import { DUMMY_TRIP } from '../data/dummyTrip'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { getTrip } from '../api/trips'
+import { extractErrorMessage } from '../lib/apiError'
 import { TripMap } from '../components/trip/TripMap'
 import { DayTabs } from '../components/trip/DayTabs'
 import { RouteWarningBanner } from '../components/trip/RouteWarningBanner'
@@ -14,17 +17,60 @@ function durationBadgeLabel(durationDays: number): string {
 }
 
 export default function TripItineraryPage() {
-  useParams()
+  const { tripId } = useParams()
+  const navigate = useNavigate()
   const location = useLocation()
-  const trip: TripResponse = (location.state as { trip?: TripResponse } | null)?.trip ?? DUMMY_TRIP
+  const initialTrip = (location.state as { trip?: TripResponse } | null)?.trip
 
-  const [activeDay, setActiveDay] = useState(trip.days[0]?.day ?? 1)
-  const [dayActivities, setDayActivities] = useState<Record<number, Activity[]>>(() =>
-    Object.fromEntries(trip.days.map((d) => [d.day, d.activities])),
+  const tripQuery = useQuery({
+    queryKey: ['trip', tripId],
+    queryFn: () => getTrip(tripId!),
+    enabled: !!tripId,
+    initialData: initialTrip && initialTrip.trip_id === tripId ? initialTrip : undefined,
+    retry: (failureCount, error) => {
+      if (isAxiosError(error) && error.response && error.response.status < 500) return false
+      return failureCount < 3
+    },
+  })
+
+  const trip = tripQuery.data
+
+  const [activeDay, setActiveDay] = useState<number | null>(null)
+  const [dayActivities, setDayActivities] = useState<Record<number, Activity[]> | null>(null)
+
+  useEffect(() => {
+    if (trip && dayActivities === null) {
+      setActiveDay(trip.days[0]?.day ?? 1)
+      setDayActivities(Object.fromEntries(trip.days.map((d) => [d.day, d.activities])))
+    }
+  }, [trip, dayActivities])
+
+  const currentDay = useMemo(
+    () => trip?.days.find((d) => d.day === activeDay),
+    [trip, activeDay],
   )
+  const currentActivities = currentDay ? (dayActivities?.[currentDay.day] ?? []) : []
 
-  const currentDay = useMemo(() => trip.days.find((d) => d.day === activeDay), [trip.days, activeDay])
-  const currentActivities = currentDay ? (dayActivities[currentDay.day] ?? []) : []
+  if (tripQuery.isLoading) {
+    return (
+      <div className="it-shell">
+        <p className="it-status-text">불러오는 중...</p>
+      </div>
+    )
+  }
+
+  if (tripQuery.isError || !trip) {
+    return (
+      <div className="it-shell">
+        <p className="it-status-text">
+          {extractErrorMessage(tripQuery.error, '여행 정보를 불러오지 못했습니다.')}
+        </p>
+        <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={() => navigate('/')}>
+          홈으로
+        </button>
+      </div>
+    )
+  }
 
   if (!currentDay) return null
 
@@ -33,16 +79,16 @@ export default function TripItineraryPage() {
   }
 
   function handleOptimize() {
-    // 목업 단계: 실제 재계산은 API 연결(2단계)에서 구현
-    window.alert('동선 최적화는 API 연결 후 동작합니다.')
+    // 재조정 API 연결은 M6에서 구현
+    window.alert('동선 최적화는 다음 마일스톤에서 동작합니다.')
   }
 
   function handleReorderRequest() {
-    window.alert('재조정 요청은 API 연결 후 동작합니다.')
+    window.alert('재조정 요청은 다음 마일스톤에서 동작합니다.')
   }
 
   function handleSave() {
-    window.alert('저장은 API 연결 후 동작합니다.')
+    window.alert('저장은 이미 완료되어 있어요. 저장한 여행 목록은 다음 마일스톤에서 구현됩니다.')
   }
 
   return (
@@ -60,7 +106,7 @@ export default function TripItineraryPage() {
       <TripMap activities={currentActivities} flagged={currentDay.route_warning.flagged} />
 
       <div className="it-body">
-        <DayTabs days={trip.days} selectedDay={activeDay} onSelect={setActiveDay} />
+        <DayTabs days={trip.days} selectedDay={activeDay!} onSelect={setActiveDay} />
 
         <div className="it-theme-row">
           <h2 className="it-theme-text">{currentDay.theme ?? `Day ${currentDay.day}`}</h2>
