@@ -10,6 +10,11 @@ export interface TripCreateRequest {
   include_nearby: boolean
 }
 
+export interface ReorderRequest {
+  day: number
+  new_activity_order: string[]
+}
+
 export interface RouteWarning {
   flagged: boolean
   reason: string | null

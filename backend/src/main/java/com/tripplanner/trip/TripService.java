@@ -4,9 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tripplanner.ai.AiCallException;
 import com.tripplanner.ai.AiParseException;
 import com.tripplanner.ai.ItineraryGenerationService;
+import com.tripplanner.ai.PartialRegenerationViolationException;
+import com.tripplanner.ai.ReorderGenerationService;
+import com.tripplanner.ai.RouteWarningRuleChecker;
 import com.tripplanner.ai.dto.AiActivityPayload;
 import com.tripplanner.ai.dto.AiDayPayload;
 import com.tripplanner.ai.dto.AiItineraryPayload;
+import com.tripplanner.ai.dto.AiRouteWarningPayload;
 import com.tripplanner.auth.User;
 import com.tripplanner.auth.UserRepository;
 import com.tripplanner.common.ApiException;
@@ -14,6 +18,7 @@ import com.tripplanner.common.ErrorCode;
 import com.tripplanner.trip.dto.ActivityResponseDto;
 import com.tripplanner.trip.dto.DayResponseDto;
 import com.tripplanner.trip.dto.MetaDto;
+import com.tripplanner.trip.dto.ReorderRequest;
 import com.tripplanner.trip.dto.RouteWarningDto;
 import com.tripplanner.trip.dto.TripCreateRequest;
 import com.tripplanner.trip.dto.TripResponse;
@@ -23,7 +28,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +50,8 @@ public class TripService {
             .toFormatter();
 
     private final ItineraryGenerationService itineraryGenerationService;
+    private final ReorderGenerationService reorderGenerationService;
+    private final RouteWarningRuleChecker routeWarningRuleChecker;
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
     private final ItineraryDayRepository itineraryDayRepository;
@@ -52,6 +61,8 @@ public class TripService {
 
     public TripService(
             ItineraryGenerationService itineraryGenerationService,
+            ReorderGenerationService reorderGenerationService,
+            RouteWarningRuleChecker routeWarningRuleChecker,
             UserRepository userRepository,
             TripRepository tripRepository,
             ItineraryDayRepository itineraryDayRepository,
@@ -59,6 +70,8 @@ public class TripService {
             TripRevisionRepository tripRevisionRepository,
             ObjectMapper objectMapper) {
         this.itineraryGenerationService = itineraryGenerationService;
+        this.reorderGenerationService = reorderGenerationService;
+        this.routeWarningRuleChecker = routeWarningRuleChecker;
         this.userRepository = userRepository;
         this.tripRepository = tripRepository;
         this.itineraryDayRepository = itineraryDayRepository;
@@ -103,7 +116,6 @@ public class TripService {
         trip.setUpdatedAt(now);
         trip = tripRepository.save(trip);
 
-        List<DayResponseDto> dayResponses = new ArrayList<>();
         for (AiDayPayload dayPayload : payload.days()) {
             ItineraryDay day = new ItineraryDay();
             day.setTrip(trip);
@@ -114,12 +126,9 @@ public class TripService {
             day.setLastModifiedAt(null);
             day = itineraryDayRepository.save(day);
 
-            List<ActivityResponseDto> activityResponses = new ArrayList<>();
             List<AiActivityPayload> activityPayloads = dayPayload.activities();
             for (int i = 0; i < activityPayloads.size(); i++) {
                 AiActivityPayload activityPayload = activityPayloads.get(i);
-                LocalTime time = parseTime(activityPayload.time());
-
                 ItineraryActivity activity = new ItineraryActivity();
                 activity.setItineraryDay(day);
                 activity.setActivityKey(
@@ -127,7 +136,7 @@ public class TripService {
                                 ? activityPayload.id()
                                 : "d" + dayPayload.day() + "-a" + (i + 1));
                 activity.setOrderIndex(i);
-                activity.setTime(time);
+                activity.setTime(parseTime(activityPayload.time()));
                 activity.setTitle(activityPayload.title());
                 activity.setDescription(activityPayload.description());
                 activity.setCategory(activityPayload.category());
@@ -138,21 +147,104 @@ public class TripService {
                 activity.setLat(activityPayload.lat());
                 activity.setLng(activityPayload.lng());
                 itineraryActivityRepository.save(activity);
-
-                activityResponses.add(mapActivity(activity));
             }
-
-            dayResponses.add(new DayResponseDto(
-                    dayPayload.day(),
-                    dayPayload.theme(),
-                    activityResponses,
-                    false,
-                    new RouteWarningDto(day.isRouteWarningFlagged(), day.getRouteWarningReason())));
         }
 
-        saveRevisionSnapshot(trip, dayResponses);
+        TripResponse response = buildTripResponse(trip);
+        saveRevisionSnapshot(trip, response.days(), null);
+        return response;
+    }
 
-        return new TripResponse(trip.getId(), destination, durationDays, payload.summary(), dayResponses, new MetaDto(now, 1));
+    @Transactional
+    public TripResponse reorder(UUID userId, UUID tripId, ReorderRequest request) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+        if (!trip.getUser().getId().equals(userId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+        }
+
+        int day = request.day();
+        ItineraryDay targetDay = itineraryDayRepository.findByTripIdAndDayNumber(tripId, day)
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, "day가 유효한 범위를 벗어났습니다."));
+
+        List<ItineraryDay> allDays = itineraryDayRepository.findByTripIdOrderByDayNumberAsc(tripId);
+        List<AiDayPayload> originalDayPayloads = new ArrayList<>();
+        List<ItineraryActivity> targetDayActivities = null;
+        for (ItineraryDay d : allDays) {
+            List<ItineraryActivity> activities =
+                    itineraryActivityRepository.findByItineraryDayIdOrderByOrderIndexAsc(d.getId());
+            if (d.getId().equals(targetDay.getId())) {
+                targetDayActivities = activities;
+            }
+            originalDayPayloads.add(toAiDayPayload(d, activities));
+        }
+
+        Set<String> existingKeys = new HashSet<>();
+        for (ItineraryActivity activity : targetDayActivities) {
+            existingKeys.add(activity.getActivityKey());
+        }
+        Set<String> requestedKeys = new HashSet<>(request.newActivityOrder());
+        if (requestedKeys.size() != request.newActivityOrder().size() || !requestedKeys.equals(existingKeys)) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "new_activity_order가 해당 day의 활동과 일치하지 않습니다.");
+        }
+
+        AiItineraryPayload originalPayload =
+                new AiItineraryPayload(trip.getDestination(), trip.getDurationDays(), trip.getSummary(), originalDayPayloads);
+
+        AiDayPayload changedDayPayload;
+        try {
+            changedDayPayload = reorderGenerationService.generate(originalPayload, day, request.newActivityOrder());
+        } catch (AiCallException | AiParseException | PartialRegenerationViolationException e) {
+            log.error("재조정 실패: tripId={} day={}", tripId, day, e);
+            throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 재조정에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        }
+
+        boolean flagged = routeWarningRuleChecker.isInefficient(changedDayPayload.activities());
+        String reason = null;
+        if (flagged) {
+            String aiReason = changedDayPayload.routeWarning() != null ? changedDayPayload.routeWarning().reason() : null;
+            reason = (aiReason != null && !aiReason.isBlank()) ? aiReason : RouteWarningRuleChecker.DEFAULT_REASON;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        itineraryActivityRepository.deleteByItineraryDayId(targetDay.getId());
+        // Hibernate는 같은 flush에서 삭제보다 삽입을 먼저 실행하므로, 명시적으로 flush해
+        // (itinerary_day_id, order_index) 유니크 제약과 충돌하지 않게 한다.
+        itineraryActivityRepository.flush();
+        List<AiActivityPayload> newActivities = changedDayPayload.activities();
+        for (int i = 0; i < newActivities.size(); i++) {
+            AiActivityPayload activityPayload = newActivities.get(i);
+            ItineraryActivity activity = new ItineraryActivity();
+            activity.setItineraryDay(targetDay);
+            activity.setActivityKey(activityPayload.id());
+            activity.setOrderIndex(i);
+            activity.setTime(parseTime(activityPayload.time()));
+            activity.setTitle(activityPayload.title());
+            activity.setDescription(activityPayload.description());
+            activity.setCategory(activityPayload.category());
+            activity.setDurationMinutes(activityPayload.durationMinutes());
+            activity.setLocation(activityPayload.location());
+            activity.setEstimatedCost(activityPayload.estimatedCost());
+            activity.setTips(activityPayload.tips());
+            activity.setLat(activityPayload.lat());
+            activity.setLng(activityPayload.lng());
+            itineraryActivityRepository.save(activity);
+        }
+
+        targetDay.setTheme(changedDayPayload.theme());
+        targetDay.setRouteWarningFlagged(flagged);
+        targetDay.setRouteWarningReason(reason);
+        targetDay.setLastModifiedAt(now);
+        itineraryDayRepository.save(targetDay);
+
+        trip.setRevision(trip.getRevision() + 1);
+        trip.setUpdatedAt(now);
+        trip = tripRepository.save(trip);
+
+        TripResponse response = buildTripResponse(trip);
+        saveRevisionSnapshot(trip, response.days(), day);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -164,7 +256,11 @@ public class TripService {
             throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
         }
 
-        List<ItineraryDay> days = itineraryDayRepository.findByTripIdOrderByDayNumberAsc(tripId);
+        return buildTripResponse(trip);
+    }
+
+    private TripResponse buildTripResponse(Trip trip) {
+        List<ItineraryDay> days = itineraryDayRepository.findByTripIdOrderByDayNumberAsc(trip.getId());
         List<DayResponseDto> dayResponses = new ArrayList<>();
         for (ItineraryDay day : days) {
             List<ItineraryActivity> activities =
@@ -189,6 +285,28 @@ public class TripService {
                 new MetaDto(trip.getUpdatedAt(), trip.getRevision()));
     }
 
+    private AiDayPayload toAiDayPayload(ItineraryDay day, List<ItineraryActivity> activities) {
+        List<AiActivityPayload> activityPayloads = activities.stream().map(this::toAiActivityPayload).toList();
+        AiRouteWarningPayload routeWarning =
+                new AiRouteWarningPayload(day.isRouteWarningFlagged(), day.getRouteWarningReason());
+        return new AiDayPayload(day.getDayNumber(), day.getTheme(), activityPayloads, routeWarning);
+    }
+
+    private AiActivityPayload toAiActivityPayload(ItineraryActivity activity) {
+        return new AiActivityPayload(
+                activity.getActivityKey(),
+                activity.getTime() != null ? activity.getTime().format(TIME_OUTPUT_FORMATTER) : null,
+                activity.getTitle(),
+                activity.getDescription(),
+                activity.getCategory(),
+                activity.getDurationMinutes(),
+                activity.getLocation(),
+                activity.getEstimatedCost(),
+                activity.getTips(),
+                activity.getLat(),
+                activity.getLng());
+    }
+
     private ActivityResponseDto mapActivity(ItineraryActivity activity) {
         return new ActivityResponseDto(
                 activity.getActivityKey(),
@@ -204,12 +322,12 @@ public class TripService {
                 activity.getLng());
     }
 
-    private void saveRevisionSnapshot(Trip trip, List<DayResponseDto> dayResponses) {
+    private void saveRevisionSnapshot(Trip trip, List<DayResponseDto> dayResponses, Integer changedDayNumber) {
         try {
             TripRevision revision = new TripRevision();
             revision.setTrip(trip);
-            revision.setRevisionNumber(1);
-            revision.setChangedDayNumber(null);
+            revision.setRevisionNumber(trip.getRevision());
+            revision.setChangedDayNumber(changedDayNumber);
             revision.setDaysSnapshot(objectMapper.writeValueAsString(dayResponses));
             revision.setCreatedAt(OffsetDateTime.now());
             tripRevisionRepository.save(revision);

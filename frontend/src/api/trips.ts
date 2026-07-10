@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { TripCreateRequest, TripResponse } from '../types/trip'
+import type { ReorderRequest, TripCreateRequest, TripResponse } from '../types/trip'
 
 export async function createTrip(request: TripCreateRequest): Promise<TripResponse> {
   const { data } = await apiClient.post<TripResponse>('/api/trips', request)
@@ -8,5 +8,10 @@ export async function createTrip(request: TripCreateRequest): Promise<TripRespon
 
 export async function getTrip(tripId: string): Promise<TripResponse> {
   const { data } = await apiClient.get<TripResponse>(`/api/trips/${tripId}`)
+  return data
+}
+
+export async function reorderTrip(tripId: string, request: ReorderRequest): Promise<TripResponse> {
+  const { data } = await apiClient.patch<TripResponse>(`/api/trips/${tripId}/reorder`, request)
   return data
 }

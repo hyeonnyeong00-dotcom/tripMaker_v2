@@ -171,6 +171,11 @@
   align-self: center;
 }
 
+.it-error-text {
+  font-size: 13px;
+  color: var(--color-error);
+}
+
 .it-timeline {
   display: flex;
   flex-direction: column;

@@ -1,7 +1,5 @@
 package com.tripplanner.ai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tripplanner.ai.dto.AiDayPayload;
 import com.tripplanner.ai.dto.AiItineraryPayload;
 import com.tripplanner.cache.AiResponseCacheService;
 import com.tripplanner.cache.CacheKeyGenerator;
@@ -39,7 +37,7 @@ public class ItineraryGenerationService {
     private final AnthropicClient anthropicClient;
     private final CacheKeyGenerator cacheKeyGenerator;
     private final AiResponseCacheService cacheService;
-    private final ObjectMapper objectMapper;
+    private final AiItineraryPayloadParser payloadParser;
 
     public ItineraryGenerationService(
             PromptTemplateService promptTemplateService,
@@ -47,13 +45,13 @@ public class ItineraryGenerationService {
             AnthropicClient anthropicClient,
             CacheKeyGenerator cacheKeyGenerator,
             AiResponseCacheService cacheService,
-            ObjectMapper objectMapper) {
+            AiItineraryPayloadParser payloadParser) {
         this.promptTemplateService = promptTemplateService;
         this.promptRenderer = promptRenderer;
         this.anthropicClient = anthropicClient;
         this.cacheKeyGenerator = cacheKeyGenerator;
         this.cacheService = cacheService;
-        this.objectMapper = objectMapper;
+        this.payloadParser = payloadParser;
     }
 
     public AiItineraryPayload generate(
@@ -102,7 +100,7 @@ public class ItineraryGenerationService {
             }
 
             try {
-                return parseAndValidate(raw, durationDays);
+                return payloadParser.parse(raw, durationDays);
             } catch (AiParseException e) {
                 lastParseException = e;
                 log.warn("AI 응답 파싱/검증 실패 (attempt {}/{})", attempt, MAX_ATTEMPTS, e);
@@ -113,46 +111,5 @@ public class ItineraryGenerationService {
             throw lastParseException;
         }
         throw lastCallException;
-    }
-
-    private AiItineraryPayload parseAndValidate(String raw, int durationDays) {
-        String cleaned = stripMarkdownFence(raw);
-        AiItineraryPayload payload;
-        try {
-            payload = objectMapper.readValue(cleaned, AiItineraryPayload.class);
-        } catch (Exception e) {
-            throw new AiParseException("AI 응답 JSON 파싱 실패", e);
-        }
-
-        if (payload.days() == null || payload.days().size() != durationDays) {
-            throw new AiParseException(
-                    "AI 응답 day 개수가 duration_days와 불일치: expected=" + durationDays
-                            + " actual=" + (payload.days() == null ? 0 : payload.days().size()));
-        }
-
-        for (AiDayPayload day : payload.days()) {
-            if (day.activities() == null || day.activities().isEmpty()) {
-                throw new AiParseException("day " + day.day() + "에 activities가 없음");
-            }
-            boolean hasMissingCoordinates = day.activities().stream()
-                    .anyMatch(a -> a.lat() == null || a.lng() == null || a.title() == null || a.title().isBlank());
-            if (hasMissingCoordinates) {
-                throw new AiParseException("day " + day.day() + "의 activity에 필수값(title/lat/lng) 누락");
-            }
-        }
-
-        return payload;
-    }
-
-    private String stripMarkdownFence(String raw) {
-        String trimmed = raw.trim();
-        if (trimmed.startsWith("```")) {
-            int firstNewline = trimmed.indexOf('\n');
-            int lastFence = trimmed.lastIndexOf("```");
-            if (firstNewline != -1 && lastFence > firstNewline) {
-                return trimmed.substring(firstNewline + 1, lastFence).trim();
-            }
-        }
-        return trimmed;
     }
 }

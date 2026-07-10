@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ItineraryActivityRepository extends JpaRepository<ItineraryActivity, UUID> {
 
     List<ItineraryActivity> findByItineraryDayIdOrderByOrderIndexAsc(UUID itineraryDayId);
+
+    void deleteByItineraryDayId(UUID itineraryDayId);
 }

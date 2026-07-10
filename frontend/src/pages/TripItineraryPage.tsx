@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { getTrip } from '../api/trips'
+import { getTrip, reorderTrip } from '../api/trips'
 import { extractErrorMessage } from '../lib/apiError'
 import { TripMap } from '../components/trip/TripMap'
 import { DayTabs } from '../components/trip/DayTabs'
@@ -20,6 +20,7 @@ export default function TripItineraryPage() {
   const { tripId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const initialTrip = (location.state as { trip?: TripResponse } | null)?.trip
 
   const tripQuery = useQuery({
@@ -37,6 +38,7 @@ export default function TripItineraryPage() {
 
   const [activeDay, setActiveDay] = useState<number | null>(null)
   const [dayActivities, setDayActivities] = useState<Record<number, Activity[]> | null>(null)
+  const [reorderError, setReorderError] = useState<string | null>(null)
 
   useEffect(() => {
     if (trip && dayActivities === null) {
@@ -44,6 +46,19 @@ export default function TripItineraryPage() {
       setDayActivities(Object.fromEntries(trip.days.map((d) => [d.day, d.activities])))
     }
   }, [trip, dayActivities])
+
+  const reorderMutation = useMutation({
+    mutationFn: (vars: { day: number; newActivityOrder: string[] }) =>
+      reorderTrip(tripId!, { day: vars.day, new_activity_order: vars.newActivityOrder }),
+    onSuccess: (response) => {
+      queryClient.setQueryData(['trip', tripId], response)
+      setDayActivities(Object.fromEntries(response.days.map((d) => [d.day, d.activities])))
+      setReorderError(null)
+    },
+    onError: (error) => {
+      setReorderError(extractErrorMessage(error, '재조정에 실패했습니다. 잠시 후 다시 시도해주세요.'))
+    },
+  })
 
   const currentDay = useMemo(
     () => trip?.days.find((d) => d.day === activeDay),
@@ -78,13 +93,10 @@ export default function TripItineraryPage() {
     setDayActivities((prev) => ({ ...prev, [currentDay!.day]: next }))
   }
 
-  function handleOptimize() {
-    // 재조정 API 연결은 M6에서 구현
-    window.alert('동선 최적화는 다음 마일스톤에서 동작합니다.')
-  }
-
   function handleReorderRequest() {
-    window.alert('재조정 요청은 다음 마일스톤에서 동작합니다.')
+    if (!currentDay) return
+    setReorderError(null)
+    reorderMutation.mutate({ day: currentDay.day, newActivityOrder: currentActivities.map((a) => a.id) })
   }
 
   function handleSave() {
@@ -114,18 +126,32 @@ export default function TripItineraryPage() {
         </div>
 
         {currentDay.route_warning.flagged && (
-          <RouteWarningBanner reason={currentDay.route_warning.reason} onOptimize={handleOptimize} />
+          <RouteWarningBanner reason={currentDay.route_warning.reason} onOptimize={handleReorderRequest} />
         )}
 
-        <ActivityTimeline activities={currentActivities} onReorder={handleReorder} />
+        {reorderError && <p className="it-error-text">{reorderError}</p>}
+
+        <div style={reorderMutation.isPending ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
+          <ActivityTimeline activities={currentActivities} onReorder={handleReorder} />
+        </div>
       </div>
 
       <footer className="it-footer">
-        <button type="button" className="it-footer-btn it-footer-btn--outline" onClick={handleOptimize}>
+        <button
+          type="button"
+          className="it-footer-btn it-footer-btn--outline"
+          disabled={reorderMutation.isPending}
+          onClick={handleReorderRequest}
+        >
           동선 최적화
         </button>
-        <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={handleReorderRequest}>
-          재조정
+        <button
+          type="button"
+          className="it-footer-btn it-footer-btn--primary"
+          disabled={reorderMutation.isPending}
+          onClick={handleReorderRequest}
+        >
+          {reorderMutation.isPending ? '재조정 중...' : '재조정'}
         </button>
       </footer>
     </div>
