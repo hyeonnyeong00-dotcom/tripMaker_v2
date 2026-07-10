@@ -21,22 +21,24 @@ import org.springframework.stereotype.Component;
 public class AnthropicClient {
 
     private static final Logger log = LoggerFactory.getLogger(AnthropicClient.class);
-    private static final String API_URL = "https://api.anthropic.com/v1/messages";
     private static final String ANTHROPIC_VERSION = "2023-06-01";
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String model;
+    private final String baseUrl;
 
     public AnthropicClient(
             ObjectMapper objectMapper,
             @Value("${ai.api-key}") String apiKey,
-            @Value("${ai.model}") String model) {
+            @Value("${ai.model}") String model,
+            @Value("${ai.base-url}") String baseUrl) {
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
         this.objectMapper = objectMapper;
         this.apiKey = apiKey;
         this.model = model;
+        this.baseUrl = baseUrl;
     }
 
     /**
@@ -56,7 +58,7 @@ public class AnthropicClient {
         HttpRequest request;
         try {
             request = HttpRequest.newBuilder()
-                    .uri(URI.create(API_URL))
+                    .uri(URI.create(baseUrl))
                     .timeout(timeout)
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", ANTHROPIC_VERSION)

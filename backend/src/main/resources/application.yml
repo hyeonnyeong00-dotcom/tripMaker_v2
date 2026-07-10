@@ -30,3 +30,4 @@ jwt:
 ai:
   api-key: ${AI_API_KEY}
   model: ${AI_MODEL:claude-haiku-4-5-20251001}
+  base-url: ${AI_BASE_URL:https://api.anthropic.com/v1/messages}
