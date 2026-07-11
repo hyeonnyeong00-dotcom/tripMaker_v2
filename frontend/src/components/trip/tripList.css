@@ -1,0 +1,144 @@
+.tl-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100svh;
+  padding: 24px 20px 48px;
+  background: var(--color-bg);
+}
+
+.tl-heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 4px 0 20px;
+}
+
+.tl-status-text {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--color-text-sub);
+  font-size: 14px;
+}
+
+.tl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tl-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tl-thumbnail {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: var(--radius-button);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.tl-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tl-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tl-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-dday-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-chip);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tl-card-dates {
+  font-size: 13px;
+  color: var(--color-text-sub);
+  margin: 0;
+}
+
+.tl-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tl-card-chips .tc-preference-chip {
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: default;
+}
+
+.tl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 80px 24px 40px;
+}
+
+.tl-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.tl-empty-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tl-empty-subline {
+  font-size: 14px;
+  color: var(--color-text-sub);
+  margin: 8px 0 24px;
+}
+
+.tl-empty-cta {
+  height: 52px;
+  padding: 0 28px;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}

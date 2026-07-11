@@ -3,7 +3,9 @@ package com.tripplanner.trip;
 import com.tripplanner.trip.dto.ReorderRequest;
 import com.tripplanner.trip.dto.TripCreateRequest;
 import com.tripplanner.trip.dto.TripResponse;
+import com.tripplanner.trip.dto.TripSummaryDto;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,12 @@ public class TripController {
             Authentication authentication, @Valid @RequestBody TripCreateRequest request) {
         UUID userId = UUID.fromString(authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(tripService.createTrip(userId, request));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<TripSummaryDto>> list(Authentication authentication) {
+        UUID userId = UUID.fromString(authentication.getName());
+        return ResponseEntity.ok(tripService.listTrips(userId));
     }
 
     @GetMapping("/{tripId}")

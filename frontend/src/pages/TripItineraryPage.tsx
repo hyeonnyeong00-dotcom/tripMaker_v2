@@ -4,6 +4,7 @@ import { isAxiosError } from 'axios'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getTrip, reorderTrip } from '../api/trips'
 import { extractErrorMessage } from '../lib/apiError'
+import { AppHeader } from '../components/layout/AppHeader'
 import { TripMap } from '../components/trip/TripMap'
 import { DayTabs } from '../components/trip/DayTabs'
 import { RouteWarningBanner } from '../components/trip/RouteWarningBanner'
@@ -68,22 +69,28 @@ export default function TripItineraryPage() {
 
   if (tripQuery.isLoading) {
     return (
-      <div className="it-shell">
-        <p className="it-status-text">불러오는 중...</p>
-      </div>
+      <>
+        <AppHeader />
+        <div className="it-shell">
+          <p className="it-status-text">불러오는 중...</p>
+        </div>
+      </>
     )
   }
 
   if (tripQuery.isError || !trip) {
     return (
-      <div className="it-shell">
-        <p className="it-status-text">
-          {extractErrorMessage(tripQuery.error, '여행 정보를 불러오지 못했습니다.')}
-        </p>
-        <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={() => navigate('/')}>
-          홈으로
-        </button>
-      </div>
+      <>
+        <AppHeader />
+        <div className="it-shell">
+          <p className="it-status-text">
+            {extractErrorMessage(tripQuery.error, '여행 정보를 불러오지 못했습니다.')}
+          </p>
+          <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={() => navigate('/')}>
+            홈으로
+          </button>
+        </div>
+      </>
     )
   }
 
@@ -104,7 +111,9 @@ export default function TripItineraryPage() {
   }
 
   return (
-    <div className="it-shell">
+    <>
+      <AppHeader />
+      <div className="it-shell">
       <header className="it-header">
         <div>
           <h1 className="it-title">{trip.destination} 일정</h1>
@@ -154,6 +163,7 @@ export default function TripItineraryPage() {
           {reorderMutation.isPending ? '재조정 중...' : '재조정'}
         </button>
       </footer>
-    </div>
+      </div>
+    </>
   )
 }

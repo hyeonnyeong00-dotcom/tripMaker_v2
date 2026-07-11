@@ -1,45 +1,37 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { logout, me } from '../api/auth'
-import { clearSession } from '../lib/session'
-import '../components/auth/auth.css'
+import { useQuery } from '@tanstack/react-query'
+import { AppHeader } from '../components/layout/AppHeader'
+import { TripCard } from '../components/trip/TripCard'
+import { EmptyTripState } from '../components/trip/EmptyTripState'
+import { listTrips } from '../api/trips'
+import { extractErrorMessage } from '../lib/apiError'
+import '../components/trip/tripForm.css'
+import '../components/trip/tripList.css'
 
 export default function HomePage() {
-  const navigate = useNavigate()
-  const meQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: me })
-
-  const logoutMutation = useMutation({
-    mutationFn: logout,
-    onSettled: () => {
-      clearSession()
-      navigate('/login', { replace: true })
-    },
-  })
+  const tripsQuery = useQuery({ queryKey: ['trips'], queryFn: listTrips })
 
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', padding: '32px 24px' }}>
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>로그인 완료</h1>
-      <p style={{ color: 'var(--color-text-sub)', marginBottom: 24 }}>
-        {meQuery.isLoading && '불러오는 중...'}
-        {meQuery.isError && '사용자 정보를 불러오지 못했습니다.'}
-        {meQuery.data && `${meQuery.data.email} (${meQuery.data.role})님으로 로그인됨. 일정 생성 화면은 다음 마일스톤에서 구현됩니다.`}
-      </p>
-      <button
-        type="button"
-        className="auth-submit"
-        onClick={() => logoutMutation.mutate()}
-        disabled={logoutMutation.isPending}
-      >
-        로그아웃
-      </button>
-      <button
-        type="button"
-        className="auth-submit"
-        style={{ marginTop: 12, background: 'transparent', color: 'var(--color-primary)', border: '1px solid var(--color-primary)' }}
-        onClick={() => navigate('/trips/new')}
-      >
-        일정 생성 폼 미리보기
-      </button>
-    </div>
+    <>
+      <AppHeader />
+      <div className="tl-shell">
+        <h1 className="tl-heading">내 여행</h1>
+
+        {tripsQuery.isLoading && <p className="tl-status-text">불러오는 중...</p>}
+
+        {tripsQuery.isError && (
+          <p className="tl-status-text">{extractErrorMessage(tripsQuery.error, '여행 목록을 불러오지 못했습니다.')}</p>
+        )}
+
+        {tripsQuery.data && tripsQuery.data.length === 0 && <EmptyTripState />}
+
+        {tripsQuery.data && tripsQuery.data.length > 0 && (
+          <div className="tl-list">
+            {tripsQuery.data.map((trip) => (
+              <TripCard key={trip.trip_id} trip={trip} />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   )
 }

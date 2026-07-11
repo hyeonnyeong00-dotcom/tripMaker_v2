@@ -1,5 +1,10 @@
 import { apiClient } from './client'
-import type { ReorderRequest, TripCreateRequest, TripResponse } from '../types/trip'
+import type { ReorderRequest, TripCreateRequest, TripResponse, TripSummary } from '../types/trip'
+
+export async function listTrips(): Promise<TripSummary[]> {
+  const { data } = await apiClient.get<TripSummary[]>('/api/trips')
+  return data
+}
 
 export async function createTrip(request: TripCreateRequest): Promise<TripResponse> {
   const { data } = await apiClient.post<TripResponse>('/api/trips', request)

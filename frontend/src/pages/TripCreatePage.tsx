@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { AppHeader } from '../components/layout/AppHeader'
 import { NEARBY_MAP } from '../data/destinations'
 import { DestinationPickerModal } from '../components/trip/DestinationPickerModal'
 import { BudgetInput } from '../components/trip/BudgetInput'
@@ -81,7 +82,9 @@ export default function TripCreatePage() {
   }
 
   return (
-    <div className="tc-shell">
+    <>
+      <AppHeader />
+      <div className="tc-shell">
       <div className="tc-header">
         <h1 className="tc-headline">어디로 떠나볼까요?</h1>
         <p className="tc-subline">목적지만 정해오세요. 동선은 AI가 짤게요.</p>
@@ -189,6 +192,7 @@ export default function TripCreatePage() {
         destinationLabel={destination}
         onComplete={() => {}}
       />
-    </div>
+      </div>
+    </>
   )
 }

@@ -14,6 +14,16 @@ export interface TripCreateRequest {
   active_end_time: string
 }
 
+export interface TripSummary {
+  trip_id: string
+  destination: string
+  summary: string | null
+  start_date: string
+  end_date: string
+  duration_days: number
+  preferences: string[]
+}
+
 export interface ReorderRequest {
   day: number
   new_activity_order: string[]

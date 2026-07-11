@@ -22,6 +22,7 @@ import com.tripplanner.trip.dto.ReorderRequest;
 import com.tripplanner.trip.dto.RouteWarningDto;
 import com.tripplanner.trip.dto.TripCreateRequest;
 import com.tripplanner.trip.dto.TripResponse;
+import com.tripplanner.trip.dto.TripSummaryDto;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -275,6 +276,20 @@ public class TripService {
         }
 
         return buildTripResponse(trip);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TripSummaryDto> listTrips(UUID userId) {
+        return tripRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
+                .map(trip -> new TripSummaryDto(
+                        trip.getId(),
+                        trip.getDestination(),
+                        trip.getSummary(),
+                        trip.getStartDate(),
+                        trip.getEndDate(),
+                        trip.getDurationDays(),
+                        List.of(trip.getPreferences())))
+                .toList();
     }
 
     private TripResponse buildTripResponse(Trip trip) {
