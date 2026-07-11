@@ -4,6 +4,7 @@ import SignupPage from './pages/SignupPage'
 import HomePage from './pages/HomePage'
 import TripCreatePage from './pages/TripCreatePage'
 import TripItineraryPage from './pages/TripItineraryPage'
+import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 function App() {
@@ -15,7 +16,7 @@ function App() {
         <Route
           path="/"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['user']}>
               <HomePage />
             </ProtectedRoute>
           }
@@ -23,7 +24,7 @@ function App() {
         <Route
           path="/trips/new"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['user']}>
               <TripCreatePage />
             </ProtectedRoute>
           }
@@ -31,8 +32,16 @@ function App() {
         <Route
           path="/trips/:tripId"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['user']}>
               <TripItineraryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminDashboardPage />
             </ProtectedRoute>
           }
         />

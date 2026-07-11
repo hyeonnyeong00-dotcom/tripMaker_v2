@@ -4,10 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { NEARBY_MAP } from '../data/destinations'
 import { DestinationPickerModal } from '../components/trip/DestinationPickerModal'
 import { BudgetInput } from '../components/trip/BudgetInput'
+import { CompanionChips } from '../components/trip/CompanionChips'
 import { PreferenceChips } from '../components/trip/PreferenceChips'
+import { ActiveTimeInput } from '../components/trip/ActiveTimeInput'
 import { GenerationLoadingOverlay } from '../components/trip/GenerationLoadingOverlay'
 import { createTrip } from '../api/trips'
 import { extractErrorMessage } from '../lib/apiError'
+import { DEFAULT_ACTIVE_END_TIME, DEFAULT_ACTIVE_START_TIME } from '../data/tripFormOptions'
 import '../components/trip/tripForm.css'
 import '../components/trip/destinationPicker.css'
 
@@ -33,8 +36,12 @@ export default function TripCreatePage() {
   const [includeNearby, setIncludeNearby] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [budgetLevel, setBudgetLevel] = useState('')
+  const [companion, setCompanion] = useState('')
+  const [budgetMin, setBudgetMin] = useState(0)
+  const [budgetMax, setBudgetMax] = useState<number | null>(null)
   const [preferences, setPreferences] = useState<string[]>([])
+  const [activeStartTime, setActiveStartTime] = useState(DEFAULT_ACTIVE_START_TIME)
+  const [activeEndTime, setActiveEndTime] = useState(DEFAULT_ACTIVE_END_TIME)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const createTripMutation = useMutation({
@@ -50,7 +57,7 @@ export default function TripCreatePage() {
   const trimmedDestination = destination.trim()
   const durationBadge = getDurationBadge(startDate, endDate)
   const canSubmit =
-    trimmedDestination !== '' && durationBadge !== null && budgetLevel.trim() !== '' && preferences.length > 0
+    trimmedDestination !== '' && durationBadge !== null && companion !== '' && preferences.length > 0
 
   function handleSelectDestination(name: string) {
     setDestination(name)
@@ -63,9 +70,13 @@ export default function TripCreatePage() {
       destination: trimmedDestination,
       start_date: startDate,
       end_date: endDate,
-      budget_level: budgetLevel.trim(),
+      budget_min: budgetMin,
+      budget_max: budgetMax,
+      companion,
       preferences,
       include_nearby: includeNearby,
+      active_start_time: activeStartTime,
+      active_end_time: activeEndTime,
     })
   }
 
@@ -132,13 +143,27 @@ export default function TripCreatePage() {
         </div>
 
         <div className="tc-field">
+          <label className="tc-label">누구와</label>
+          <CompanionChips value={companion} onChange={setCompanion} />
+        </div>
+
+        <div className="tc-field">
           <label className="tc-label">예산</label>
-          <BudgetInput value={budgetLevel} onChange={setBudgetLevel} />
+          <BudgetInput min={budgetMin} max={budgetMax} onChange={(min, max) => { setBudgetMin(min); setBudgetMax(max) }} />
         </div>
 
         <div className="tc-field">
           <label className="tc-label">취향</label>
           <PreferenceChips selected={preferences} onChange={setPreferences} />
+        </div>
+
+        <div className="tc-field">
+          <label className="tc-label">활동 시간대</label>
+          <ActiveTimeInput
+            startTime={activeStartTime}
+            endTime={activeEndTime}
+            onChange={(start, end) => { setActiveStartTime(start); setActiveEndTime(end) }}
+          />
         </div>
 
         {errorMessage && <p className="tc-error">{errorMessage}</p>}

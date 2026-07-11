@@ -5,9 +5,13 @@ export interface TripCreateRequest {
   destination: string
   start_date: string
   end_date: string
-  budget_level: string
+  budget_min: number
+  budget_max: number | null
+  companion: string
   preferences: string[]
   include_nearby: boolean
+  active_start_time: string
+  active_end_time: string
 }
 
 export interface ReorderRequest {

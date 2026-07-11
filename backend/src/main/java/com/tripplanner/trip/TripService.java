@@ -48,6 +48,8 @@ public class TripService {
             .appendPattern(":ss")
             .optionalEnd()
             .toFormatter();
+    private static final LocalTime DEFAULT_ACTIVE_START_TIME = LocalTime.of(9, 0);
+    private static final LocalTime DEFAULT_ACTIVE_END_TIME = LocalTime.of(21, 0);
 
     private final ItineraryGenerationService itineraryGenerationService;
     private final ReorderGenerationService reorderGenerationService;
@@ -91,10 +93,22 @@ public class TripService {
                 .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
 
         String destination = request.destination().trim();
+        String companion = request.companion().trim();
+        LocalTime activeStartTime = parseTimeOrDefault(request.activeStartTime(), DEFAULT_ACTIVE_START_TIME);
+        LocalTime activeEndTime = parseTimeOrDefault(request.activeEndTime(), DEFAULT_ACTIVE_END_TIME);
+
         AiItineraryPayload payload;
         try {
             payload = itineraryGenerationService.generate(
-                    destination, durationDays, request.budgetLevel(), request.preferences(), request.includeNearby());
+                    destination,
+                    durationDays,
+                    request.budgetMin(),
+                    request.budgetMax(),
+                    companion,
+                    request.preferences(),
+                    request.includeNearby(),
+                    activeStartTime.format(TIME_OUTPUT_FORMATTER),
+                    activeEndTime.format(TIME_OUTPUT_FORMATTER));
         } catch (AiCallException | AiParseException e) {
             log.error("일정 생성 실패: destination={} durationDays={}", destination, durationDays, e);
             throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 일정 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -107,10 +121,14 @@ public class TripService {
         trip.setStartDate(request.startDate());
         trip.setEndDate(request.endDate());
         trip.setDurationDays(durationDays);
-        trip.setBudgetLevel(request.budgetLevel().trim());
+        trip.setBudgetMin(request.budgetMin());
+        trip.setBudgetMax(request.budgetMax());
+        trip.setCompanion(companion);
         trip.setPreferences(request.preferences().toArray(new String[0]));
         trip.setSummary(payload.summary());
         trip.setIncludeNearby(request.includeNearby());
+        trip.setActiveStartTime(activeStartTime);
+        trip.setActiveEndTime(activeEndTime);
         trip.setRevision(1);
         trip.setCreatedAt(now);
         trip.setUpdatedAt(now);
@@ -334,6 +352,13 @@ public class TripService {
         } catch (Exception e) {
             throw new ApiException(ErrorCode.STORAGE_ERROR, "여행 이력 저장에 실패했습니다.");
         }
+    }
+
+    private LocalTime parseTimeOrDefault(String raw, LocalTime fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        return LocalTime.parse(raw.trim(), TIME_OUTPUT_FORMATTER);
     }
 
     private LocalTime parseTime(String raw) {

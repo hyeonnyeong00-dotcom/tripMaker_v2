@@ -52,7 +52,8 @@ AI 기반 여행 일정 플래너. 목적지/기간/예산/취향 입력 → AI�
 ## 4. API 계약 (PRD 9절 기반 — 절대 준수)
 
 - `POST /api/auth/signup` · `POST /api/auth/login` · `POST /api/auth/logout`
-- `POST /api/trips` — 최초 생성. 요청 바디에 **`include_nearby: boolean` 추가**(근교 포함 토글).
+- `POST /api/trips` — 최초 생성. 요청 바디에 **`include_nearby: boolean`**(근교 포함 토글) +
+  **`active_start_time: "HH:mm"`, `active_end_time: "HH:mm"`**(하루 활동 시작~종료 시간대, 기본값 "09:00"/"21:00") 추가.
   캐시 히트 시 캐시 반환. 응답: data-spec 스키마(revision=1)
 - `PATCH /api/trips/{trip_id}/reorder` — `{ "day": 2, "new_activity_order": [...] }`
   응답: 전체 스키마(해당 day만 `last_modified: true`, revision +1)
@@ -82,15 +83,25 @@ AI 생성 시 실제 장소의 근사 좌표를 함께 반환하도록 프롬프
 
 ### 5.3 AI 응답 캐시 (확정 설계 — ERD보다 이 정의가 우선)
 - 캐시 키 = SHA-256( 정규화 결합 문자열 ), 정규화:
-  destination `trim`+소문자 / 날짜 대신 **duration_days** / budget_level `trim`+소문자 /
-  preferences **정렬 후** `,` 결합 / **include_nearby 포함**
+  destination `trim`+소문자 / 날짜 대신 **duration_days** / budget_min+budget_max(NULL=상한없음, 그대로 정수 결합) /
+  companion `trim`+소문자 /
+  preferences **정렬 후** `,` 결합 / **include_nearby 포함** / **active_start_time+active_end_time 포함**
 - TTL 30일: 조회 시 `created_at` 30일 초과면 미스 처리 후 새 응답 upsert (lazy expiry, 배치 없음)
 - 최초 생성에만 적용, 재조정 미적용. 캐시 조회 실패 시 AI 직접 호출 폴백
 
 ### 5.4 AI 호출 공통
+- 모든 activity의 시작 시간은 `active_start_time`~`active_end_time` 범위 안에서만 배치하도록 프롬프트에 명시(범위 밖 배치 금지)
+- 예산은 budget_min~budget_max(NULL이면 "50만원 이상, 상한 없음") 범위를 자연어로 변환해 프롬프트에 포함
+- companion 값에 따라 장소 성격을 조정하도록 프롬프트에 명시(예: kid→아이 동반 가능 장소 우선, couple→로맨틱한 장소, friend→그룹 액티비티 등)
 - 저비용 모델, `max_tokens`/타임아웃은 duration_days 비례 동적 설정
 - 호출 실패/파싱 실패 구분 로깅, 각 1회 재시도
 - 프롬프트는 하드코딩하지 않고 `prompt_templates` 테이블에서 로드 (`initial_generation`, `reorder` 2종)
+
+### 5.5-a 로그인 후 랜딩 분기 (완전 분리형, 확정)
+- 로그인 화면은 user/admin 공통 1개. 인증 성공 후 JWT의 role로 분기
+- `role=user` → "내 여행" 목록 페이지로 이동, 일반 사용자 화면만 노출(관리자 메뉴 없음)
+- `role=admin` → 관리자 대시보드로 이동, 일반 사용자 화면(생성/목록/일정표)은 노출하지 않음(완전 분리)
+- 프론트 라우트 가드: `/admin/**`는 role=admin만 접근, 아니면 로그인 페이지나 403 화면으로 리다이렉트 (백엔드 403과 별개 이중 방어)
 
 ### 5.5 목적지 선택 (확정 설계)
 - 외부 API 없이 `frontend/src/data/destinations.ts` 정적 데이터로 드릴다운 모달 구현
@@ -104,6 +115,11 @@ AI 생성 시 실제 장소의 근사 좌표를 함께 반환하도록 프롬프
 ### 5.6 ERD 델타 (docs/ERD.md에 아래를 추가/수정해 구현)
 1. `itinerary_activities`에 `lat double precision NULL`, `lng double precision NULL` 컬럼 추가
 2. `trips`에 `include_nearby boolean NOT NULL default false` 컬럼 추가
+2-1. `trips`에 `active_start_time time NOT NULL default '09:00'`, `active_end_time time NOT NULL default '21:00'` 컬럼 추가
+2-2. `trips.budget_level(text)` 컬럼을 **제거**하고 대신 `budget_min int NOT NULL default 0`,
+   `budget_max int NULL`(NULL = "50만원 이상", 상한 없음) 컬럼 추가
+2-3. `trips`에 `companion text NOT NULL` 컬럼 추가 (값은 애플리케이션 레벨에서 6종으로 고정:
+   parent/friend/solo/couple/kid/etc — 프론트 표시 라벨은 6절 참고)
 3. `ai_response_cache.cache_key`의 해시 구성은 ERD 표기(start_date+end_date)가 아니라 §5.3 정의를 따름
 4. `ai_response_cache.expires_at`은 사용하지 않음(NULL 유지) — 만료는 §5.3 lazy expiry로 처리
 
@@ -112,7 +128,7 @@ AI 생성 시 실제 장소의 근사 좌표를 함께 반환하도록 프롬프
 | 화면 | 필수 상태 |
 |---|---|
 | 로그인/회원가입 | 브랜드 마크+인사형 헤드라인, 입력 검증 에러, 비밀번호 강도 바, 입력 완료 전 버튼 비활성 톤 |
-| 일정 생성 폼 | 목적지 선택 모달(§5.5), 기간 선택 시 "N박 M일" 자동 배지, 예산 자유 텍스트+빠른 입력 칩, 취향 칩(선택 개수 표시), CTA에 목적지 반영("부산 일정 만들기"), 로딩=단계 체크리스트 |
+| 일정 생성 폼 | 목적지 선택 모달(§5.5), 기간 선택 시 "N박 M일" 자동 배지, **누구와**(단일 선택 칩: 혼자/연인과/가족과/친구와/아이와/기타), **예산**(듀얼 핸들 range 슬라이더 + 최소/최대 입력 박스, 최대 핸들이 트랙 오른쪽 끝에 완전히 붙으면 "50만원 이상"으로 표기·상한 없음 처리, 히스토그램 막대는 사용 안 함), 취향 칩(선택 개수 표시), **활동 시간대**(시작/종료 시간 입력창 탭 시 휠 피커 팝업: 오전·오후 / 시 / 분 3열, 분은 00·30분만 선택 가능, 확인 버튼으로 닫힘, 기본값 09:00~21:00), CTA에 목적지 반영("부산 일정 만들기"), 로딩=단계 체크리스트 |
 | 일정표 | **상단 Google 지도**(마커 번호=타임라인 순번 동일, Polyline 동선, 비효율 구간은 노란 점선) → Day 탭 → 테마+변경됨 배지 → route_warning 참고 배지 → 타임라인 → 하단 [동선 최적화]+[재조정] 버튼 쌍. 드래그 시 지도 동선 동시 갱신 |
 | 저장한 여행 목록 | 카드=목적지 썸네일 블록(목적지 해시 기반 색)+D-day 배지+기간+취향 칩. **revision/수정 횟수 노출 금지**. 빈 상태(아래) |
 | 관리자 3화면 | 상단 요약 지표 카드(생성 수/flagged 수·비율/활성 템플릿) → 모니터링 테이블(행 클릭→상세) → 인기 목적지 막대 → 템플릿 카드(활성 버전 배지, 편집/이력) |

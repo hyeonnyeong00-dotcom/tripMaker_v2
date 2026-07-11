@@ -23,7 +23,7 @@ export default function LoginPage() {
     mutationFn: login,
     onSuccess: (auth) => {
       saveSession(auth)
-      navigate('/', { replace: true })
+      navigate(auth.role === 'admin' ? '/admin' : '/', { replace: true })
     },
   })
 

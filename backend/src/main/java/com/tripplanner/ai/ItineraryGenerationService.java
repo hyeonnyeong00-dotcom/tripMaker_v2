@@ -55,8 +55,25 @@ public class ItineraryGenerationService {
     }
 
     public AiItineraryPayload generate(
-            String destination, int durationDays, String budgetLevel, List<String> preferences, boolean includeNearby) {
-        String cacheKey = cacheKeyGenerator.generate(destination, durationDays, budgetLevel, preferences, includeNearby);
+            String destination,
+            int durationDays,
+            Integer budgetMin,
+            Integer budgetMax,
+            String companion,
+            List<String> preferences,
+            boolean includeNearby,
+            String activeStartTime,
+            String activeEndTime) {
+        String cacheKey = cacheKeyGenerator.generate(
+                destination,
+                durationDays,
+                budgetMin,
+                budgetMax,
+                companion,
+                preferences,
+                includeNearby,
+                activeStartTime,
+                activeEndTime);
 
         Optional<AiItineraryPayload> cached = cacheService.lookup(cacheKey);
         if (cached.isPresent()) {
@@ -66,7 +83,17 @@ public class ItineraryGenerationService {
         log.info("AI 응답 캐시 미스, AI 직접 호출 진행. cacheKey={}", cacheKey);
 
         PromptTemplate template = promptTemplateService.loadActive("initial_generation");
-        String userPrompt = promptRenderer.render(template, destination, durationDays, budgetLevel, preferences, includeNearby);
+        String userPrompt = promptRenderer.render(
+                template,
+                destination,
+                durationDays,
+                budgetMin,
+                budgetMax,
+                companion,
+                preferences,
+                includeNearby,
+                activeStartTime,
+                activeEndTime);
         int maxTokens = BASE_MAX_TOKENS + TOKENS_PER_DAY * durationDays;
         Duration timeout = Duration.ofSeconds(
                 Math.min(MAX_TIMEOUT_SECONDS, BASE_TIMEOUT_SECONDS + TIMEOUT_SECONDS_PER_DAY * durationDays));
@@ -76,9 +103,13 @@ public class ItineraryGenerationService {
         Map<String, Object> requestParams = new LinkedHashMap<>();
         requestParams.put("destination", destination);
         requestParams.put("duration_days", durationDays);
-        requestParams.put("budget_level", budgetLevel);
+        requestParams.put("budget_min", budgetMin);
+        requestParams.put("budget_max", budgetMax);
+        requestParams.put("companion", companion);
         requestParams.put("preferences", preferences);
         requestParams.put("include_nearby", includeNearby);
+        requestParams.put("active_start_time", activeStartTime);
+        requestParams.put("active_end_time", activeEndTime);
         cacheService.upsert(cacheKey, requestParams, payload);
 
         return payload;

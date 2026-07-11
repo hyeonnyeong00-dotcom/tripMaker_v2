@@ -9,6 +9,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -40,8 +41,14 @@ public class Trip {
     @Column(name = "duration_days", nullable = false)
     private int durationDays;
 
-    @Column(name = "budget_level", nullable = false)
-    private String budgetLevel;
+    @Column(name = "budget_min", nullable = false)
+    private int budgetMin;
+
+    @Column(name = "budget_max")
+    private Integer budgetMax;
+
+    @Column(nullable = false)
+    private String companion;
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(nullable = false)
@@ -52,6 +59,12 @@ public class Trip {
 
     @Column(name = "include_nearby", nullable = false)
     private boolean includeNearby;
+
+    @Column(name = "active_start_time", nullable = false)
+    private LocalTime activeStartTime;
+
+    @Column(name = "active_end_time", nullable = false)
+    private LocalTime activeEndTime;
 
     @Column(nullable = false)
     private int revision;
@@ -110,12 +123,28 @@ public class Trip {
         this.durationDays = durationDays;
     }
 
-    public String getBudgetLevel() {
-        return budgetLevel;
+    public int getBudgetMin() {
+        return budgetMin;
     }
 
-    public void setBudgetLevel(String budgetLevel) {
-        this.budgetLevel = budgetLevel;
+    public void setBudgetMin(int budgetMin) {
+        this.budgetMin = budgetMin;
+    }
+
+    public Integer getBudgetMax() {
+        return budgetMax;
+    }
+
+    public void setBudgetMax(Integer budgetMax) {
+        this.budgetMax = budgetMax;
+    }
+
+    public String getCompanion() {
+        return companion;
+    }
+
+    public void setCompanion(String companion) {
+        this.companion = companion;
     }
 
     public String[] getPreferences() {
@@ -140,6 +169,22 @@ public class Trip {
 
     public void setIncludeNearby(boolean includeNearby) {
         this.includeNearby = includeNearby;
+    }
+
+    public LocalTime getActiveStartTime() {
+        return activeStartTime;
+    }
+
+    public void setActiveStartTime(LocalTime activeStartTime) {
+        this.activeStartTime = activeStartTime;
+    }
+
+    public LocalTime getActiveEndTime() {
+        return activeEndTime;
+    }
+
+    public void setActiveEndTime(LocalTime activeEndTime) {
+        this.activeEndTime = activeEndTime;
     }
 
     public int getRevision() {

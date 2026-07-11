@@ -8,15 +8,25 @@ import org.springframework.stereotype.Component;
 
 /**
  * CLAUDE.md 5.3 정규화 규칙: destination trim+소문자 / duration_days(날짜 아님) /
- * budget_level trim+소문자 / preferences 정렬 후 콤마 결합 / include_nearby 포함.
+ * budget_min+budget_max(NULL=상한없음, 그대로 정수 결합) / companion trim+소문자 /
+ * preferences 정렬 후 콤마 결합 / include_nearby 포함 / active_start_time+active_end_time 포함.
  */
 @Component
 public class CacheKeyGenerator {
 
     public String generate(
-            String destination, int durationDays, String budgetLevel, List<String> preferences, boolean includeNearby) {
+            String destination,
+            int durationDays,
+            Integer budgetMin,
+            Integer budgetMax,
+            String companion,
+            List<String> preferences,
+            boolean includeNearby,
+            String activeStartTime,
+            String activeEndTime) {
         String normalizedDestination = destination.trim().toLowerCase();
-        String normalizedBudget = budgetLevel.trim().toLowerCase();
+        String normalizedBudget = budgetMin + "-" + (budgetMax != null ? budgetMax : "null");
+        String normalizedCompanion = companion.trim().toLowerCase();
         String normalizedPreferences = preferences.stream()
                 .map(String::trim)
                 .map(String::toLowerCase)
@@ -25,7 +35,8 @@ public class CacheKeyGenerator {
                 .orElse("");
 
         String combined = normalizedDestination + "|" + durationDays + "|" + normalizedBudget + "|"
-                + normalizedPreferences + "|" + includeNearby;
+                + normalizedCompanion + "|" + normalizedPreferences + "|" + includeNearby + "|"
+                + activeStartTime + "-" + activeEndTime;
 
         return sha256Hex(combined);
     }

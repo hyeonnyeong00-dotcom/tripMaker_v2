@@ -1,24 +1,30 @@
 # 데이터 스펙
 
-> 출처: `docs/PRD.md` 8절 원본에 CLAUDE.md 4절 확장분(lat/lng, include_nearby)을 반영.
+> 출처: `docs/PRD.md` 8절 원본에 CLAUDE.md 4절 확장분(lat/lng, include_nearby, active_start_time/active_end_time)을 반영.
 > 충돌 시 우선순위는 CLAUDE.md 상단 명시(CLAUDE.md > ERD 델타 > ERD.md > PRD.md)를 따른다.
 
 ## 1. 최초 생성 입력 (`POST /api/trips`)
 
 - `destination`(텍스트, 제한 없음, 필수)
 - `start_date`, `end_date`(YYYY-MM-DD, 필수)
-- `budget_level`(자유 텍스트, 최대 30자, 필수)
+- `budget_min`(정수, 필수), `budget_max`(정수 또는 null=상한 없음) — 예산 범위. CLAUDE.md 5.6-2-2
+- `companion`(텍스트, 필수) — `parent`/`friend`/`solo`/`couple`/`kid`/`etc` 6종 중 하나. CLAUDE.md 5.6-2-3
 - `preferences`(문자열 배열, 다중 선택, 필수)
 - `include_nearby`(boolean, 필수) — 근교 포함 토글. CLAUDE.md 4절/5.5절
+- `active_start_time`, `active_end_time`("HH:mm", 생략 시 기본값 "09:00"/"21:00") — 하루 활동 시간대. CLAUDE.md 4절/5.6-2-1
 
 ```json
 {
   "destination": "부산",
   "start_date": "2026-08-01",
   "end_date": "2026-08-03",
-  "budget_level": "보통",
+  "budget_min": 100000,
+  "budget_max": 300000,
+  "companion": "couple",
   "preferences": ["힐링", "먹방"],
-  "include_nearby": false
+  "include_nearby": false,
+  "active_start_time": "09:00",
+  "active_end_time": "21:00"
 }
 ```
 
