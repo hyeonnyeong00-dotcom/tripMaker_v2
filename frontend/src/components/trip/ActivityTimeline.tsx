@@ -8,6 +8,7 @@ import { estimateTravelMinutes } from '../../lib/geo'
 interface Props {
   activities: Activity[]
   onReorder: (next: Activity[]) => void
+  readOnly?: boolean
 }
 
 function formatCost(cost: number | null): string {
@@ -19,11 +20,13 @@ interface CardProps {
   activity: Activity
   index: number
   isLast: boolean
+  readOnly?: boolean
 }
 
-function SortableActivityCard({ activity, index, isLast }: CardProps) {
+function SortableActivityCard({ activity, index, isLast, readOnly }: CardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: activity.id,
+    disabled: readOnly,
   })
 
   const style = {
@@ -35,9 +38,9 @@ function SortableActivityCard({ activity, index, isLast }: CardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`it-timeline-row ${isDragging ? 'it-timeline-row--dragging' : ''}`}
-      {...attributes}
-      {...listeners}
+      className={`it-timeline-row ${isDragging ? 'it-timeline-row--dragging' : ''} ${readOnly ? 'it-timeline-row--readonly' : ''}`}
+      {...(readOnly ? {} : attributes)}
+      {...(readOnly ? {} : listeners)}
     >
       <div className="it-timeline-rail">
         <span className="it-timeline-time">{activity.time ?? '--:--'}</span>
@@ -60,10 +63,11 @@ function SortableActivityCard({ activity, index, isLast }: CardProps) {
   )
 }
 
-export function ActivityTimeline({ activities, onReorder }: Props) {
+export function ActivityTimeline({ activities, onReorder, readOnly }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   function handleDragEnd(event: DragEndEvent) {
+    if (readOnly) return
     const { active, over } = event
     if (!over || active.id === over.id) return
     const oldIndex = activities.findIndex((a) => a.id === active.id)
@@ -77,7 +81,12 @@ export function ActivityTimeline({ activities, onReorder }: Props) {
         <div className="it-timeline">
           {activities.map((activity, index) => (
             <div key={activity.id}>
-              <SortableActivityCard activity={activity} index={index} isLast={index === activities.length - 1} />
+              <SortableActivityCard
+                activity={activity}
+                index={index}
+                isLast={index === activities.length - 1}
+                readOnly={readOnly}
+              />
               {index < activities.length - 1 && (
                 <div className="it-travel-gap">
                   🚕 약 {estimateTravelMinutes(activity, activities[index + 1])}분

@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage'
 import TripCreatePage from './pages/TripCreatePage'
 import TripItineraryPage from './pages/TripItineraryPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
+import AdminTripDetailPage from './pages/admin/AdminTripDetailPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 function App() {
@@ -42,6 +43,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/trips/:tripId"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminTripDetailPage />
             </ProtectedRoute>
           }
         />

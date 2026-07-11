@@ -1,9 +1,9 @@
 interface Props {
   reason: string | null
-  onOptimize: () => void
+  onOptimize?: () => void
 }
 
-/** CLAUDE.md 6절 고정 문구/톤 — 경고가 아닌 참고/제안 톤 배지 */
+/** CLAUDE.md 6절 고정 문구/톤 — 경고가 아닌 참고/제안 톤 배지. onOptimize 없으면 읽기 전용(관리자 뷰)으로 버튼을 숨긴다 */
 export function RouteWarningBanner({ reason, onOptimize }: Props) {
   return (
     <div className="it-warning-banner">
@@ -12,9 +12,11 @@ export function RouteWarningBanner({ reason, onOptimize }: Props) {
         <p className="it-warning-text">이 순서면 이동 시간이 길어질 수 있어요</p>
         {reason && <p className="it-warning-reason">{reason}</p>}
       </div>
-      <button type="button" className="it-warning-cta" onClick={onOptimize}>
-        동선 최적화
-      </button>
+      {onOptimize && (
+        <button type="button" className="it-warning-cta" onClick={onOptimize}>
+          동선 최적화
+        </button>
+      )}
     </div>
   )
 }

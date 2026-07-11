@@ -244,6 +244,10 @@
   cursor: grab;
 }
 
+.it-timeline-row--readonly .it-activity-card {
+  cursor: default;
+}
+
 .it-activity-card-head {
   display: flex;
   align-items: center;

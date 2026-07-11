@@ -267,11 +267,11 @@ public class TripService {
     }
 
     @Transactional(readOnly = true)
-    public TripResponse getTrip(UUID userId, UUID tripId) {
+    public TripResponse getTrip(UUID userId, UUID tripId, boolean isAdmin) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
 
-        if (!trip.getUser().getId().equals(userId)) {
+        if (!isAdmin && !trip.getUser().getId().equals(userId)) {
             throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
         }
 

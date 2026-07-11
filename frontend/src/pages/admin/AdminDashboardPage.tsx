@@ -1,37 +1,56 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { logout, me } from '../../api/auth'
-import { clearSession } from '../../lib/session'
-import '../../components/auth/auth.css'
+import { useQuery } from '@tanstack/react-query'
+import { getDestinationStats, getFlaggedTrips, listPromptTemplates } from '../../api/admin'
+import { AdminHeader } from '../../components/admin/AdminHeader'
+import { SummaryCards } from '../../components/admin/SummaryCards'
+import { FlaggedTripsTable } from '../../components/admin/FlaggedTripsTable'
+import { DestinationBarChart } from '../../components/admin/DestinationBarChart'
+import { PromptTemplateCard } from '../../components/admin/PromptTemplateCard'
+import { extractErrorMessage } from '../../lib/apiError'
+import '../../components/admin/admin.css'
 
 export default function AdminDashboardPage() {
-  const navigate = useNavigate()
-  const meQuery = useQuery({ queryKey: ['auth', 'me'], queryFn: me })
+  const flaggedQuery = useQuery({ queryKey: ['admin', 'flagged-trips'], queryFn: getFlaggedTrips })
+  const statsQuery = useQuery({ queryKey: ['admin', 'stats', 'destinations'], queryFn: getDestinationStats })
+  const templatesQuery = useQuery({ queryKey: ['admin', 'prompt-templates'], queryFn: listPromptTemplates })
 
-  const logoutMutation = useMutation({
-    mutationFn: logout,
-    onSettled: () => {
-      clearSession()
-      navigate('/login', { replace: true })
-    },
-  })
+  const isLoading = flaggedQuery.isLoading || statsQuery.isLoading || templatesQuery.isLoading
+  const error = flaggedQuery.error ?? statsQuery.error ?? templatesQuery.error
 
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', padding: '32px 24px' }}>
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>관리자 대시보드</h1>
-      <p style={{ color: 'var(--color-text-sub)', marginBottom: 24 }}>
-        {meQuery.isLoading && '불러오는 중...'}
-        {meQuery.isError && '사용자 정보를 불러오지 못했습니다.'}
-        {meQuery.data && `${meQuery.data.email} (${meQuery.data.role})님으로 로그인됨. 관리자 대시보드는 다음 마일스톤에서 구현됩니다.`}
-      </p>
-      <button
-        type="button"
-        className="auth-submit"
-        onClick={() => logoutMutation.mutate()}
-        disabled={logoutMutation.isPending}
-      >
-        로그아웃
-      </button>
-    </div>
+    <>
+      <AdminHeader />
+      <div className="ad-shell">
+        {isLoading && <p className="ad-status-text">불러오는 중...</p>}
+
+        {error && !isLoading && (
+          <p className="ad-status-text">{extractErrorMessage(error, '관리자 데이터를 불러오지 못했습니다.')}</p>
+        )}
+
+        {!isLoading && !error && flaggedQuery.data && statsQuery.data && templatesQuery.data && (
+          <>
+            <SummaryCards
+              totalTrips={statsQuery.data.total_trips}
+              periodDays={statsQuery.data.period_days}
+              flaggedCount={flaggedQuery.data.flagged_count}
+              flaggedRatio={flaggedQuery.data.flagged_ratio}
+              activeTemplateCount={templatesQuery.data.filter((t) => t.is_active).length}
+            />
+
+            <FlaggedTripsTable trips={flaggedQuery.data.flagged_trips} />
+
+            <DestinationBarChart destinations={statsQuery.data.destinations} />
+
+            <section className="ad-section">
+              <h2 className="ad-section-title">프롬프트 템플릿</h2>
+              <div className="ad-template-list">
+                {templatesQuery.data.map((template) => (
+                  <PromptTemplateCard key={template.id} template={template} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </>
   )
 }
