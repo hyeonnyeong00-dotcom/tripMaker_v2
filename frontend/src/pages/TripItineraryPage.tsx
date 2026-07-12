@@ -71,8 +71,13 @@ export default function TripItineraryPage() {
     return (
       <>
         <AppHeader />
-        <div className="it-shell">
-          <p className="it-status-text">불러오는 중...</p>
+        <div className="itm-overlay">
+          <div className="itm-modal itm-modal--status">
+            <button type="button" className="itm-close" onClick={() => navigate('/')} aria-label="닫기">
+              ✕
+            </button>
+            <p className="it-status-text">불러오는 중...</p>
+          </div>
         </div>
       </>
     )
@@ -82,13 +87,18 @@ export default function TripItineraryPage() {
     return (
       <>
         <AppHeader />
-        <div className="it-shell">
-          <p className="it-status-text">
-            {extractErrorMessage(tripQuery.error, '여행 정보를 불러오지 못했습니다.')}
-          </p>
-          <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={() => navigate('/')}>
-            홈으로
-          </button>
+        <div className="itm-overlay">
+          <div className="itm-modal itm-modal--status">
+            <button type="button" className="itm-close" onClick={() => navigate('/')} aria-label="닫기">
+              ✕
+            </button>
+            <p className="it-status-text">
+              {extractErrorMessage(tripQuery.error, '여행 정보를 불러오지 못했습니다.')}
+            </p>
+            <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={() => navigate('/')}>
+              목록으로
+            </button>
+          </div>
         </div>
       </>
     )
@@ -113,56 +123,63 @@ export default function TripItineraryPage() {
   return (
     <>
       <AppHeader />
-      <div className="it-shell">
-      <header className="it-header">
-        <div>
-          <h1 className="it-title">{trip.destination} 일정</h1>
-          <span className="it-duration-badge">{durationBadgeLabel(trip.duration_days)}</span>
+      <div className="itm-overlay">
+        <div className="itm-modal">
+          <button type="button" className="itm-close" onClick={() => navigate('/')} aria-label="닫기">
+            ✕
+          </button>
+          <div className="itm-content">
+            <header className="it-header">
+              <div>
+                <h1 className="it-title">{trip.destination} 일정</h1>
+                <span className="it-duration-badge">{durationBadgeLabel(trip.duration_days)}</span>
+              </div>
+              <button type="button" className="it-save-btn" onClick={handleSave}>
+                저장
+              </button>
+            </header>
+
+            <TripMap activities={currentActivities} flagged={currentDay.route_warning.flagged} />
+
+            <div className="it-body">
+              <DayTabs days={trip.days} selectedDay={activeDay!} onSelect={setActiveDay} />
+
+              <div className="it-theme-row">
+                <h2 className="it-theme-text">{currentDay.theme ?? `Day ${currentDay.day}`}</h2>
+                {currentDay.last_modified && <span className="it-modified-badge">변경됨</span>}
+              </div>
+
+              {currentDay.route_warning.flagged && (
+                <RouteWarningBanner reason={currentDay.route_warning.reason} onOptimize={handleReorderRequest} />
+              )}
+
+              {reorderError && <p className="it-error-text">{reorderError}</p>}
+
+              <div style={reorderMutation.isPending ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
+                <ActivityTimeline activities={currentActivities} onReorder={handleReorder} />
+              </div>
+            </div>
+
+            <footer className="it-footer">
+              <button
+                type="button"
+                className="it-footer-btn it-footer-btn--outline"
+                disabled={reorderMutation.isPending}
+                onClick={handleReorderRequest}
+              >
+                동선 최적화
+              </button>
+              <button
+                type="button"
+                className="it-footer-btn it-footer-btn--primary"
+                disabled={reorderMutation.isPending}
+                onClick={handleReorderRequest}
+              >
+                {reorderMutation.isPending ? '재조정 중...' : '재조정'}
+              </button>
+            </footer>
+          </div>
         </div>
-        <button type="button" className="it-save-btn" onClick={handleSave}>
-          저장
-        </button>
-      </header>
-
-      <TripMap activities={currentActivities} flagged={currentDay.route_warning.flagged} />
-
-      <div className="it-body">
-        <DayTabs days={trip.days} selectedDay={activeDay!} onSelect={setActiveDay} />
-
-        <div className="it-theme-row">
-          <h2 className="it-theme-text">{currentDay.theme ?? `Day ${currentDay.day}`}</h2>
-          {currentDay.last_modified && <span className="it-modified-badge">변경됨</span>}
-        </div>
-
-        {currentDay.route_warning.flagged && (
-          <RouteWarningBanner reason={currentDay.route_warning.reason} onOptimize={handleReorderRequest} />
-        )}
-
-        {reorderError && <p className="it-error-text">{reorderError}</p>}
-
-        <div style={reorderMutation.isPending ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
-          <ActivityTimeline activities={currentActivities} onReorder={handleReorder} />
-        </div>
-      </div>
-
-      <footer className="it-footer">
-        <button
-          type="button"
-          className="it-footer-btn it-footer-btn--outline"
-          disabled={reorderMutation.isPending}
-          onClick={handleReorderRequest}
-        >
-          동선 최적화
-        </button>
-        <button
-          type="button"
-          className="it-footer-btn it-footer-btn--primary"
-          disabled={reorderMutation.isPending}
-          onClick={handleReorderRequest}
-        >
-          {reorderMutation.isPending ? '재조정 중...' : '재조정'}
-        </button>
-      </footer>
       </div>
     </>
   )
