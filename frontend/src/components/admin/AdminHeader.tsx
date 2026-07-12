@@ -12,7 +12,7 @@ export function AdminHeader() {
     mutationFn: logout,
     onSettled: () => {
       clearSession()
-      navigate('/login', { replace: true })
+      navigate('/admin/login', { replace: true })
     },
   })
 

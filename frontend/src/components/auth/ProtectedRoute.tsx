@@ -15,8 +15,9 @@ export function ProtectedRoute({
   allowedRoles: Array<'user' | 'admin'>
 }) {
   const session = getSession()
+  const adminOnly = allowedRoles.length === 1 && allowedRoles[0] === 'admin'
   if (!session) {
-    return <Navigate to="/login" replace />
+    return <Navigate to={adminOnly ? '/admin/login' : '/login'} replace />
   }
   if (!allowedRoles.includes(session.role)) {
     return <Navigate to={HOME_BY_ROLE[session.role]} replace />

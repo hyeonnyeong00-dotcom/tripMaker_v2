@@ -19,11 +19,18 @@ export default function LoginPage() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
 
+  const [roleError, setRoleError] = useState<string | null>(null)
+
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: (auth) => {
+      // 5.5-a 완전 분리형: 이 화면은 일반 사용자 전용. 관리자 계정은 /admin/login으로 안내
+      if (auth.role === 'admin') {
+        setRoleError('관리자 계정입니다. 관리자 로그인 화면을 이용해 주세요.')
+        return
+      }
       saveSession(auth)
-      navigate(auth.role === 'admin' ? '/admin' : '/', { replace: true })
+      navigate('/', { replace: true })
     },
   })
 
@@ -34,6 +41,7 @@ export default function LoginPage() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canSubmit) return
+    setRoleError(null)
     mutation.mutate({ email, password })
   }
 
@@ -44,6 +52,12 @@ export default function LoginPage() {
         {mutation.isError && (
           <div className="auth-form-error">
             {extractErrorMessage(mutation.error, '로그인에 실패했습니다.')}
+          </div>
+        )}
+
+        {roleError && (
+          <div className="auth-form-error">
+            {roleError} <Link to="/admin/login">관리자 로그인으로 이동</Link>
           </div>
         )}
 
@@ -92,6 +106,9 @@ export default function LoginPage() {
 
       <div className="auth-switch">
         아직 계정이 없으신가요? <Link to="/signup">회원가입</Link>
+      </div>
+      <div className="auth-switch auth-switch--sub">
+        관리자이신가요? <Link to="/admin/login">관리자 로그인</Link>
       </div>
     </div>
   )

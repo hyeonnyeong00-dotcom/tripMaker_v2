@@ -18,8 +18,9 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       clearSession()
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      const loginPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login'
+      if (window.location.pathname !== loginPath) {
+        window.location.href = loginPath
       }
     }
     return Promise.reject(error)

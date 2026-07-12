@@ -4,6 +4,7 @@ import SignupPage from './pages/SignupPage'
 import HomePage from './pages/HomePage'
 import TripCreatePage from './pages/TripCreatePage'
 import TripItineraryPage from './pages/TripItineraryPage'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminTripDetailPage from './pages/admin/AdminTripDetailPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
@@ -14,6 +15,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route
           path="/"
           element={
