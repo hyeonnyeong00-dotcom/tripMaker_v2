@@ -22,6 +22,11 @@ export interface AuthResponse {
   role: 'user' | 'admin'
 }
 
+export interface ChangePasswordRequest {
+  current_password: string
+  new_password: string
+}
+
 export interface ApiErrorResponse {
   error: 'VALIDATION_ERROR' | 'GENERATION_FAILED' | 'AUTH_ERROR' | 'FORBIDDEN' | 'STORAGE_ERROR'
   message: string

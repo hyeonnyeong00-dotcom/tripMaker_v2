@@ -52,6 +52,8 @@ AI 기반 여행 일정 플래너. 목적지/기간/예산/취향 입력 → AI�
 ## 4. API 계약 (PRD 9절 기반 — 절대 준수)
 
 - `POST /api/auth/signup` · `POST /api/auth/login` · `POST /api/auth/logout`
+- `POST /api/auth/change-password` — `{ "current_password", "new_password" }`, 인증 필요(user/admin 공용).
+  현재 비밀번호 불일치는 400 VALIDATION_ERROR(401이면 프론트 인터셉터가 강제 로그아웃하므로)
 - `POST /api/trips` — 최초 생성. 요청 바디에 **`include_nearby: boolean`**(근교 포함 토글) +
   **`active_start_time: "HH:mm"`, `active_end_time: "HH:mm"`**(하루 활동 시작~종료 시간대, 기본값 "09:00"/"21:00") 추가.
   캐시 히트 시 캐시 반환. 응답: data-spec 스키마(revision=1)

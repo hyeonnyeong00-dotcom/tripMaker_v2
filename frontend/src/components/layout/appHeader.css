@@ -27,6 +27,12 @@
   font-weight: 700;
 }
 
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .app-header-logout {
   border: none;
   background: transparent;

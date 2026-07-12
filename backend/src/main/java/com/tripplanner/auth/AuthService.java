@@ -1,6 +1,7 @@
 package com.tripplanner.auth;
 
 import com.tripplanner.auth.dto.AuthResponse;
+import com.tripplanner.auth.dto.ChangePasswordRequest;
 import com.tripplanner.auth.dto.LoginRequest;
 import com.tripplanner.auth.dto.MeResponse;
 import com.tripplanner.auth.dto.SignupRequest;
@@ -59,5 +60,18 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
         return new MeResponse(user.getId(), user.getEmail(), user.getRole());
+    }
+
+    public void changePassword(UUID userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
+
+        // 401은 프론트 인터셉터가 세션을 지우고 로그인으로 보내므로, 현재 비밀번호 불일치는 400으로 응답
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "현재 비밀번호가 올바르지 않습니다.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
     }
 }

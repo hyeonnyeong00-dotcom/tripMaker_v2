@@ -14,6 +14,12 @@
   color: var(--color-text);
 }
 
+.ad-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .ad-header-logout {
   border: none;
   background: transparent;

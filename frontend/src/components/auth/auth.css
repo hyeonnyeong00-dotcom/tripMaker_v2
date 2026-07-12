@@ -159,3 +159,57 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+/* 비밀번호 변경 모달 (§7 모달 공통 규칙) */
+.pw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: color-mix(in srgb, var(--color-text) 45%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.pw-modal {
+  position: relative;
+  width: min(92vw, 400px);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--color-bg);
+  border-radius: var(--radius-container);
+  padding: 28px 24px 24px;
+}
+
+.pw-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.pw-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 20px;
+}
+
+.pw-done {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pw-done-text {
+  font-size: 14px;
+  color: var(--color-text);
+  text-align: center;
+  padding: 12px 0;
+}

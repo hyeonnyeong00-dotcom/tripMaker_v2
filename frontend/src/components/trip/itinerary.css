@@ -375,10 +375,9 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--color-bg) 85%, var(--color-text));
-  color: var(--color-text);
-  font-size: 14px;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -397,12 +396,16 @@
   padding: 20px 56px 16px 24px;
 }
 
-/* 지도는 고정 높이 대신 모달 폭에 비례(상대 크기) */
+/* 지도는 고정 높이 대신 모달 폭에 비례(상대 크기), 푸터 버튼과 같은 24px 인셋 */
 .itm-content .it-map {
+  width: auto;
   height: auto;
   aspect-ratio: 16 / 10;
   max-height: 34vh;
   flex-shrink: 0;
+  margin: 0 24px;
+  border-radius: var(--radius-card);
+  overflow: hidden;
 }
 
 .itm-content .it-body {
@@ -445,6 +448,7 @@
     aspect-ratio: auto;
     height: min(62vh, 640px);
     max-height: none;
+    margin: 0;
     position: sticky;
     top: 16px;
     align-self: start;

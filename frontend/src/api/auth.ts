@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { AuthResponse, LoginRequest, MeResponse, SignupRequest } from '../types/auth'
+import type { AuthResponse, ChangePasswordRequest, LoginRequest, MeResponse, SignupRequest } from '../types/auth'
 
 export async function signup(request: SignupRequest): Promise<MeResponse> {
   const { data } = await apiClient.post<MeResponse>('/api/auth/signup', request)
@@ -18,4 +18,8 @@ export async function logout(): Promise<void> {
 export async function me(): Promise<MeResponse> {
   const { data } = await apiClient.get<MeResponse>('/api/auth/me')
   return data
+}
+
+export async function changePassword(request: ChangePasswordRequest): Promise<void> {
+  await apiClient.post('/api/auth/change-password', request)
 }

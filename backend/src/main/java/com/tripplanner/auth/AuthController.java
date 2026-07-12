@@ -1,6 +1,7 @@
 package com.tripplanner.auth;
 
 import com.tripplanner.auth.dto.AuthResponse;
+import com.tripplanner.auth.dto.ChangePasswordRequest;
 import com.tripplanner.auth.dto.LoginRequest;
 import com.tripplanner.auth.dto.MeResponse;
 import com.tripplanner.auth.dto.SignupRequest;
@@ -44,5 +45,13 @@ public class AuthController {
     public ResponseEntity<MeResponse> me(Authentication authentication) {
         UUID userId = UUID.fromString(authentication.getName());
         return ResponseEntity.ok(authService.me(userId));
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+            Authentication authentication, @Valid @RequestBody ChangePasswordRequest request) {
+        UUID userId = UUID.fromString(authentication.getName());
+        authService.changePassword(userId, request);
+        return ResponseEntity.ok().build();
     }
 }
