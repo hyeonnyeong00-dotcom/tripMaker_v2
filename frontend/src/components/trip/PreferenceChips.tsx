@@ -16,9 +16,11 @@ export function PreferenceChips({ selected, onChange }: Props) {
 
   return (
     <div>
-      <div className="tc-preference-header">
-        <span className="tc-preference-count">{selected.length}개 선택됨</span>
-      </div>
+      {selected.length > 0 && (
+        <div className="tc-preference-header">
+          <span className="tc-preference-count">{selected.length}개 선택됨</span>
+        </div>
+      )}
       <div className="tc-preference-chips">
         {PREFERENCE_OPTIONS.map((option) => (
           <button

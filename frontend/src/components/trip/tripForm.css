@@ -61,21 +61,21 @@
   border-color: var(--color-primary);
 }
 
-.tc-destination-row {
-  display: flex;
-  gap: 8px;
+.tc-destination-field {
+  position: relative;
 }
 
-.tc-destination-pick-btn {
-  flex-shrink: 0;
-  height: 48px;
-  padding: 0 16px;
-  border-radius: var(--radius-button);
-  border: 1px solid var(--color-primary);
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  font-size: 14px;
-  font-weight: 500;
+.tc-destination-pin {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.tc-destination-input {
+  padding-left: 38px;
   cursor: pointer;
 }
 
@@ -298,7 +298,7 @@
   inset: 0;
   background: color-mix(in srgb, var(--color-text) 55%, transparent);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   z-index: 70;
 }
@@ -306,9 +306,11 @@
 .tc-wheel-card {
   width: 100%;
   max-width: 480px;
+  max-height: 90vh;
   background: var(--color-bg);
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  border-radius: var(--radius-card);
   padding: 20px 24px 28px;
+  overflow-y: auto;
 }
 
 .tc-wheel-title {

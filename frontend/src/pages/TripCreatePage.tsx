@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { MouseEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../components/layout/AppHeader'
@@ -28,6 +29,21 @@ function getDurationBadge(startDate: string, endDate: string): string | null {
   const nights = Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000)
   if (nights <= 0) return null
   return `${nights}박 ${nights + 1}일`
+}
+
+function getTodayDateString(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function openDatePicker(event: MouseEvent<HTMLInputElement>) {
+  const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void }
+  if (typeof input.showPicker === 'function') {
+    input.showPicker()
+  }
 }
 
 export default function TripCreatePage() {
@@ -95,17 +111,16 @@ export default function TripCreatePage() {
           <label className="tc-label" htmlFor="destination">
             목적지
           </label>
-          <div className="tc-destination-row">
+          <div className="tc-destination-field">
+            <span className="tc-destination-pin">📍</span>
             <input
               id="destination"
-              className="tc-input"
+              className="tc-input tc-destination-input"
               value={destination}
-              placeholder="목적지를 입력하거나 선택하세요"
+              placeholder="지역을 선택해주세요"
               onChange={(e) => setDestination(e.target.value)}
+              onClick={() => setModalOpen(true)}
             />
-            <button type="button" className="tc-destination-pick-btn" onClick={() => setModalOpen(true)}>
-              선택
-            </button>
           </div>
         </div>
 
@@ -131,6 +146,8 @@ export default function TripCreatePage() {
               type="date"
               className="tc-input"
               value={startDate}
+              min={getTodayDateString()}
+              onClick={openDatePicker}
               onChange={(e) => setStartDate(e.target.value)}
             />
             <span className="tc-date-sep">–</span>
@@ -138,7 +155,8 @@ export default function TripCreatePage() {
               type="date"
               className="tc-input"
               value={endDate}
-              min={startDate || undefined}
+              min={startDate || getTodayDateString()}
+              onClick={openDatePicker}
               onChange={(e) => setEndDate(e.target.value)}
             />
           </div>

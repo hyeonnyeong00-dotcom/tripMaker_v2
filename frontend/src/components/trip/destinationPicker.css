@@ -3,7 +3,7 @@
   inset: 0;
   background: color-mix(in srgb, var(--color-text) 45%, transparent);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   z-index: 50;
 }
@@ -12,8 +12,8 @@
   width: 100%;
   max-width: 480px;
   background: var(--color-bg);
-  border-radius: var(--radius-container) var(--radius-container) 0 0;
-  max-height: 80svh;
+  border-radius: var(--radius-container);
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
