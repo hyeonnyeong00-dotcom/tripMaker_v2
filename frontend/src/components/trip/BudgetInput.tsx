@@ -6,11 +6,18 @@ interface Props {
   onChange: (min: number, max: number) => void
 }
 
-function formatWon(value: number): string {
+/** 1만원 단위 금액은 "16만원"처럼 축약 표기 (§6 라벨 규칙) */
+function formatAmount(value: number): string {
+  if (value !== 0 && value % 10_000 === 0) {
+    return `${(value / 10_000).toLocaleString('ko-KR')}만원`
+  }
   return `${value.toLocaleString('ko-KR')}원`
 }
 
 export function BudgetInput({ min, max, onChange }: Props) {
+  // 두 핸들이 겹쳤을 때 "빠져나올 수 있는 방향"의 핸들이 위로 오도록 z-index를 동적으로 준다.
+  // 트랙 끝(또는 상단 절반에서 겹침)이면 min을 위로 → 왼쪽으로 끌어낼 수 있음.
+  const minHandleOnTop = min >= BUDGET_MAX || (min === max && min > BUDGET_MAX / 2)
   function handleMinSlider(next: number) {
     onChange(Math.min(next, max), max)
   }
@@ -34,9 +41,11 @@ export function BudgetInput({ min, max, onChange }: Props) {
   return (
     <div className="tc-budget">
       <div className="tc-budget-values">
-        <span>{formatWon(min)}</span>
-        <span>–</span>
-        <span>{max >= BUDGET_MAX ? '50만원 이하' : formatWon(max)}</span>
+        <span>
+          {max >= BUDGET_MAX
+            ? `${formatAmount(min)} 이상`
+            : `${formatAmount(min)} 이상 ${formatAmount(max)} 이하`}
+        </span>
       </div>
 
       <div className="tc-budget-slider">
@@ -51,6 +60,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
         <input
           type="range"
           className="tc-budget-range tc-budget-range--min"
+          style={{ zIndex: minHandleOnTop ? 4 : 2 }}
           min={BUDGET_MIN}
           max={BUDGET_MAX}
           step={BUDGET_STEP}
@@ -60,6 +70,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
         <input
           type="range"
           className="tc-budget-range tc-budget-range--max"
+          style={{ zIndex: 3 }}
           min={BUDGET_MIN}
           max={BUDGET_MAX}
           step={BUDGET_STEP}

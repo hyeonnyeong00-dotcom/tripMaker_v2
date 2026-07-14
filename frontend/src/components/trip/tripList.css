@@ -54,13 +54,14 @@
   border: none;
   background: none;
   color: var(--color-text-muted);
-  font-size: 15px;
   cursor: pointer;
-  opacity: 0.55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tl-card-delete:hover {
-  opacity: 1;
+  color: var(--color-error);
 }
 
 .tl-confirm-overlay {

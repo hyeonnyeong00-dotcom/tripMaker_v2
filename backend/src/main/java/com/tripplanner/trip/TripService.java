@@ -51,6 +51,7 @@ public class TripService {
             .toFormatter();
     private static final LocalTime DEFAULT_ACTIVE_START_TIME = LocalTime.of(9, 0);
     private static final LocalTime DEFAULT_ACTIVE_END_TIME = LocalTime.of(21, 0);
+    private static final int MAX_TRIP_DURATION_DAYS = 30;
 
     private final ItineraryGenerationService itineraryGenerationService;
     private final ReorderGenerationService reorderGenerationService;
@@ -89,6 +90,9 @@ public class TripService {
             throw new ApiException(ErrorCode.VALIDATION_ERROR, "end_date는 start_date보다 이후여야 합니다.");
         }
         int durationDays = (int) ChronoUnit.DAYS.between(request.startDate(), request.endDate()) + 1;
+        if (durationDays > MAX_TRIP_DURATION_DAYS) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "여행 기간은 최대 30일까지 선택 가능합니다.");
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
