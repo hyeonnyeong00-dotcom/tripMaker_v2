@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,6 +50,13 @@ public class TripController {
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch("ROLE_ADMIN"::equals);
         return ResponseEntity.ok(tripService.getTrip(userId, tripId, isAdmin));
+    }
+
+    @DeleteMapping("/{tripId}")
+    public ResponseEntity<Void> delete(Authentication authentication, @PathVariable UUID tripId) {
+        UUID userId = UUID.fromString(authentication.getName());
+        tripService.deleteTrip(userId, tripId);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{tripId}/reorder")

@@ -278,6 +278,17 @@ public class TripService {
         return buildTripResponse(trip);
     }
 
+    @Transactional
+    public void deleteTrip(UUID userId, UUID tripId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+        if (!trip.getUser().getId().equals(userId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+        }
+        // days/activities/revisions는 FK ON DELETE CASCADE로 함께 삭제된다
+        tripRepository.delete(trip);
+    }
+
     @Transactional(readOnly = true)
     public List<TripSummaryDto> listTrips(UUID userId) {
         return tripRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()

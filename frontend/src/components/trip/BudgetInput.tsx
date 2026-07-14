@@ -2,8 +2,8 @@ import { BUDGET_MAX, BUDGET_MIN, BUDGET_STEP } from '../../data/tripFormOptions'
 
 interface Props {
   min: number
-  max: number | null
-  onChange: (min: number, max: number | null) => void
+  max: number
+  onChange: (min: number, max: number) => void
 }
 
 function formatWon(value: number): string {
@@ -11,28 +11,24 @@ function formatWon(value: number): string {
 }
 
 export function BudgetInput({ min, max, onChange }: Props) {
-  const maxValue = max ?? BUDGET_MAX
-
   function handleMinSlider(next: number) {
-    onChange(Math.min(next, maxValue), max)
+    onChange(Math.min(next, max), max)
   }
 
   function handleMaxSlider(next: number) {
-    const clamped = Math.max(next, min)
-    onChange(min, clamped >= BUDGET_MAX ? null : clamped)
+    onChange(min, Math.max(next, min))
   }
 
   function handleMinBox(raw: string) {
     const next = Number(raw)
     if (Number.isNaN(next)) return
-    onChange(Math.min(Math.max(next, BUDGET_MIN), maxValue), max)
+    onChange(Math.min(Math.max(next, BUDGET_MIN), max), max)
   }
 
   function handleMaxBox(raw: string) {
     const next = Number(raw)
     if (Number.isNaN(next)) return
-    const clamped = Math.max(Math.min(next, BUDGET_MAX), min)
-    onChange(min, clamped >= BUDGET_MAX ? null : clamped)
+    onChange(min, Math.max(Math.min(next, BUDGET_MAX), min))
   }
 
   return (
@@ -40,7 +36,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
       <div className="tc-budget-values">
         <span>{formatWon(min)}</span>
         <span>–</span>
-        <span>{max === null ? '50만원 이상' : formatWon(max)}</span>
+        <span>{max >= BUDGET_MAX ? '50만원 이하' : formatWon(max)}</span>
       </div>
 
       <div className="tc-budget-slider">
@@ -49,7 +45,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
           className="tc-budget-track-active"
           style={{
             left: `${(min / BUDGET_MAX) * 100}%`,
-            right: `${100 - (maxValue / BUDGET_MAX) * 100}%`,
+            right: `${100 - (max / BUDGET_MAX) * 100}%`,
           }}
         />
         <input
@@ -67,7 +63,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
           min={BUDGET_MIN}
           max={BUDGET_MAX}
           step={BUDGET_STEP}
-          value={maxValue}
+          value={max}
           onChange={(e) => handleMaxSlider(Number(e.target.value))}
         />
       </div>
@@ -77,7 +73,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
           type="number"
           className="tc-input tc-budget-box"
           min={BUDGET_MIN}
-          max={maxValue}
+          max={max}
           step={BUDGET_STEP}
           value={min}
           onChange={(e) => handleMinBox(e.target.value)}
@@ -89,7 +85,7 @@ export function BudgetInput({ min, max, onChange }: Props) {
           min={min}
           max={BUDGET_MAX}
           step={BUDGET_STEP}
-          value={maxValue}
+          value={max}
           onChange={(e) => handleMaxBox(e.target.value)}
         />
       </div>

@@ -20,3 +20,7 @@ export async function reorderTrip(tripId: string, request: ReorderRequest): Prom
   const { data } = await apiClient.patch<TripResponse>(`/api/trips/${tripId}/reorder`, request)
   return data
 }
+
+export async function deleteTrip(tripId: string): Promise<void> {
+  await apiClient.delete(`/api/trips/${tripId}`)
+}

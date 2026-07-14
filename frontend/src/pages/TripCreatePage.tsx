@@ -12,7 +12,7 @@ import { ActiveTimeInput } from '../components/trip/ActiveTimeInput'
 import { GenerationLoadingOverlay } from '../components/trip/GenerationLoadingOverlay'
 import { createTrip } from '../api/trips'
 import { extractErrorMessage } from '../lib/apiError'
-import { DEFAULT_ACTIVE_END_TIME, DEFAULT_ACTIVE_START_TIME } from '../data/tripFormOptions'
+import { BUDGET_MAX, DEFAULT_ACTIVE_END_TIME, DEFAULT_ACTIVE_START_TIME } from '../data/tripFormOptions'
 import '../components/trip/tripForm.css'
 import '../components/trip/destinationPicker.css'
 
@@ -55,7 +55,7 @@ export default function TripCreatePage() {
   const [endDate, setEndDate] = useState('')
   const [companion, setCompanion] = useState('')
   const [budgetMin, setBudgetMin] = useState(0)
-  const [budgetMax, setBudgetMax] = useState<number | null>(null)
+  const [budgetMax, setBudgetMax] = useState(BUDGET_MAX)
   const [preferences, setPreferences] = useState<string[]>([])
   const [activeStartTime, setActiveStartTime] = useState(DEFAULT_ACTIVE_START_TIME)
   const [activeEndTime, setActiveEndTime] = useState(DEFAULT_ACTIVE_END_TIME)
