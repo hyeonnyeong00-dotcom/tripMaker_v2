@@ -1,13 +1,20 @@
 package com.tripplanner.ai;
 
+import com.tripplanner.ai.dto.AiActivityPayload;
+import com.tripplanner.ai.dto.AiDayPayload;
 import com.tripplanner.ai.dto.AiItineraryPayload;
 import com.tripplanner.cache.AiResponseCacheService;
 import com.tripplanner.cache.CacheKeyGenerator;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,12 +35,19 @@ public class ItineraryGenerationService {
     private static final int MAX_ATTEMPTS = 2;
     // 실측(나고야 4일, haiku): activity 1개 ≈ 240토큰 × 하루 4~6개 ≈ 일당 1,200토큰 소비.
     // 일당 500(→900)이었을 때 응답이 max_tokens에서 잘려 미완성 JSON 파싱 실패가 재현됨 → 여유분 포함 1,600/일.
+    // (V7 다이어트로 실사용량은 줄지만 max_tokens는 상한일 뿐 비용에 영향 없으므로 보수적으로 유지)
     private static final int BASE_MAX_TOKENS = 1500;
     private static final int TOKENS_PER_DAY = 1600;
     // 실측 출력 속도 ≈ 155tok/s → 토큰 예산에 비례해 타임아웃도 상향
     private static final int BASE_TIMEOUT_SECONDS = 20;
     private static final int TIMEOUT_SECONDS_PER_DAY = 15;
-    private static final int MAX_TIMEOUT_SECONDS = 180;
+    private static final int MAX_TIMEOUT_SECONDS = 360;
+    // 1분 내 생성 목표: 이 일수를 넘으면 구간을 나눠 병렬 생성 후 병합한다
+    private static final int SINGLE_CALL_MAX_DAYS = 7;
+    private static final int MAX_DAYS_PER_CHUNK = 6;
+
+    /** 청크 병렬 호출용 공용 풀. 단일 인스턴스 전제(§1)라 최대 동시 호출만 제한한다. */
+    private final ExecutorService chunkExecutor = Executors.newFixedThreadPool(5);
 
     private final PromptTemplateService promptTemplateService;
     private final InitialGenerationPromptRenderer promptRenderer;
@@ -86,22 +100,12 @@ public class ItineraryGenerationService {
         log.info("AI 응답 캐시 미스, AI 직접 호출 진행. cacheKey={}", cacheKey);
 
         PromptTemplate template = promptTemplateService.loadActive("initial_generation");
-        String userPrompt = promptRenderer.render(
-                template,
-                destination,
-                durationDays,
-                budgetMin,
-                budgetMax,
-                companion,
-                preferences,
-                includeNearby,
-                activeStartTime,
-                activeEndTime);
-        int maxTokens = BASE_MAX_TOKENS + TOKENS_PER_DAY * durationDays;
-        Duration timeout = Duration.ofSeconds(
-                Math.min(MAX_TIMEOUT_SECONDS, BASE_TIMEOUT_SECONDS + TIMEOUT_SECONDS_PER_DAY * durationDays));
-
-        AiItineraryPayload payload = callAndParseWithRetry(userPrompt, maxTokens, timeout, durationDays);
+        AiItineraryPayload payload = durationDays <= SINGLE_CALL_MAX_DAYS
+                ? generateSegment(template, destination, 1, durationDays, durationDays,
+                        budgetMin, budgetMax, companion, preferences, includeNearby, activeStartTime, activeEndTime)
+                : generateChunked(template, destination, durationDays,
+                        budgetMin, budgetMax, companion, preferences, includeNearby, activeStartTime, activeEndTime);
+        payload = clampActivityTimes(payload, activeStartTime, activeEndTime);
 
         Map<String, Object> requestParams = new LinkedHashMap<>();
         requestParams.put("destination", destination);
@@ -116,6 +120,145 @@ public class ItineraryGenerationService {
         cacheService.upsert(cacheKey, requestParams, payload);
 
         return payload;
+    }
+
+    /** [startDay, endDay] 구간을 한 번의 AI 호출로 생성한다(전체 생성이면 1~durationDays). */
+    private AiItineraryPayload generateSegment(
+            PromptTemplate template,
+            String destination,
+            int startDay,
+            int endDay,
+            int totalDays,
+            Integer budgetMin,
+            Integer budgetMax,
+            String companion,
+            List<String> preferences,
+            boolean includeNearby,
+            String activeStartTime,
+            String activeEndTime) {
+        int segmentDays = endDay - startDay + 1;
+        String userPrompt = promptRenderer.render(
+                template, destination, startDay, endDay, totalDays,
+                budgetMin, budgetMax, companion, preferences, includeNearby, activeStartTime, activeEndTime);
+        int maxTokens = BASE_MAX_TOKENS + TOKENS_PER_DAY * segmentDays;
+        Duration timeout = Duration.ofSeconds(
+                Math.min(MAX_TIMEOUT_SECONDS, BASE_TIMEOUT_SECONDS + TIMEOUT_SECONDS_PER_DAY * segmentDays));
+        return callAndParseWithRetry(userPrompt, maxTokens, timeout, segmentDays);
+    }
+
+    /**
+     * SINGLE_CALL_MAX_DAYS 초과 일정은 MAX_DAYS_PER_CHUNK 이하 구간으로 균등 분할해 병렬 생성 후
+     * day 번호/activity id를 위치 기반으로 재부여하며 병합한다(§5.4 "1분 내 생성" 개선).
+     */
+    private AiItineraryPayload generateChunked(
+            PromptTemplate template,
+            String destination,
+            int durationDays,
+            Integer budgetMin,
+            Integer budgetMax,
+            String companion,
+            List<String> preferences,
+            boolean includeNearby,
+            String activeStartTime,
+            String activeEndTime) {
+        List<int[]> ranges = splitRanges(durationDays);
+        log.info("장기 일정 분할 생성: durationDays={} chunks={}", durationDays, ranges.size());
+
+        List<CompletableFuture<AiItineraryPayload>> futures = ranges.stream()
+                .map(range -> CompletableFuture.supplyAsync(
+                        () -> generateSegment(template, destination, range[0], range[1], durationDays,
+                                budgetMin, budgetMax, companion, preferences, includeNearby,
+                                activeStartTime, activeEndTime),
+                        chunkExecutor))
+                .toList();
+
+        List<AiItineraryPayload> chunks = new ArrayList<>();
+        try {
+            for (CompletableFuture<AiItineraryPayload> future : futures) {
+                chunks.add(future.join());
+            }
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof AiCallException callException) {
+                throw callException;
+            }
+            if (e.getCause() instanceof AiParseException parseException) {
+                throw parseException;
+            }
+            throw new AiCallException("분할 생성 중 알 수 없는 실패", e.getCause());
+        }
+
+        return mergeChunks(destination, durationDays, ranges, chunks);
+    }
+
+    /** durationDays를 MAX_DAYS_PER_CHUNK 이하의 균등한 [startDay, endDay] 구간들로 나눈다. */
+    private List<int[]> splitRanges(int durationDays) {
+        int chunkCount = (durationDays + MAX_DAYS_PER_CHUNK - 1) / MAX_DAYS_PER_CHUNK;
+        int baseSize = durationDays / chunkCount;
+        int remainder = durationDays % chunkCount;
+        List<int[]> ranges = new ArrayList<>();
+        int start = 1;
+        for (int i = 0; i < chunkCount; i++) {
+            int size = baseSize + (i < remainder ? 1 : 0);
+            ranges.add(new int[] {start, start + size - 1});
+            start += size;
+        }
+        return ranges;
+    }
+
+    /**
+     * §5.4 "활동 시간은 active_start~end 범위 안" 보정: 프롬프트로 강제해도 모델이 간혹
+     * 범위 밖(주로 이른 아침) 시작 시간을 내므로, 범위 밖 time은 경계값으로 클램프한다.
+     */
+    private AiItineraryPayload clampActivityTimes(AiItineraryPayload payload, String activeStartTime, String activeEndTime) {
+        List<AiDayPayload> fixedDays = new ArrayList<>();
+        for (AiDayPayload day : payload.days()) {
+            List<AiActivityPayload> fixedActivities = new ArrayList<>();
+            for (AiActivityPayload act : day.activities()) {
+                String time = act.time();
+                if (time != null && time.compareTo(activeStartTime) < 0) {
+                    time = activeStartTime;
+                } else if (time != null && time.compareTo(activeEndTime) > 0) {
+                    time = activeEndTime;
+                }
+                fixedActivities.add(time == null || time.equals(act.time())
+                        ? act
+                        : new AiActivityPayload(act.id(), time, act.title(), act.description(), act.category(),
+                                act.durationMinutes(), act.location(), act.estimatedCost(), act.tips(),
+                                act.lat(), act.lng()));
+            }
+            fixedDays.add(new AiDayPayload(day.day(), day.theme(), fixedActivities, day.routeWarning()));
+        }
+        return new AiItineraryPayload(payload.destination(), payload.durationDays(), payload.summary(), fixedDays);
+    }
+
+    /** 청크 응답들을 이어 붙이고 day 번호와 activity id를 위치 기반 전역 번호로 재부여한다. */
+    private AiItineraryPayload mergeChunks(
+            String destination, int durationDays, List<int[]> ranges, List<AiItineraryPayload> chunks) {
+        List<AiDayPayload> mergedDays = new ArrayList<>();
+        for (int c = 0; c < chunks.size(); c++) {
+            int startDay = ranges.get(c)[0];
+            List<AiDayPayload> chunkDays = chunks.get(c).days();
+            for (int i = 0; i < chunkDays.size(); i++) {
+                AiDayPayload day = chunkDays.get(i);
+                int globalDay = startDay + i;
+                List<AiActivityPayload> renumbered = new ArrayList<>();
+                for (int a = 0; a < day.activities().size(); a++) {
+                    AiActivityPayload act = day.activities().get(a);
+                    renumbered.add(new AiActivityPayload(
+                            "d" + globalDay + "-a" + (a + 1),
+                            act.time(), act.title(), act.description(), act.category(),
+                            act.durationMinutes(), act.location(), act.estimatedCost(), act.tips(),
+                            act.lat(), act.lng()));
+                }
+                mergedDays.add(new AiDayPayload(globalDay, day.theme(), renumbered, day.routeWarning()));
+            }
+        }
+        // 첫 청크 summary를 대표로 쓰되, 모델이 구간 일수("6일" 등)를 언급했으면 전체 일수로 정정
+        String summary = chunks.get(0).summary();
+        if (summary != null) {
+            summary = summary.replaceAll("\\d+일", durationDays + "일");
+        }
+        return new AiItineraryPayload(destination, durationDays, summary, mergedDays);
     }
 
     private AiItineraryPayload callAndParseWithRetry(

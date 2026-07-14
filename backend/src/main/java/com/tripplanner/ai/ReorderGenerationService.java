@@ -30,7 +30,7 @@ public class ReorderGenerationService {
     private static final int TOKENS_PER_DAY = 1600;
     private static final int BASE_TIMEOUT_SECONDS = 20;
     private static final int TIMEOUT_SECONDS_PER_DAY = 15;
-    private static final int MAX_TIMEOUT_SECONDS = 180;
+    private static final int MAX_TIMEOUT_SECONDS = 360;
 
     private final PromptTemplateService promptTemplateService;
     private final ReorderPromptRenderer promptRenderer;
