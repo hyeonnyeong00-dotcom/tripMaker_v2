@@ -25,11 +25,12 @@ public class ReorderGenerationService {
                     + "설명 문장이나 마크다운 코드펜스(```)는 절대 포함하지 마라.";
 
     private static final int MAX_ATTEMPTS = 2;
-    private static final int BASE_MAX_TOKENS = 800;
-    private static final int TOKENS_PER_DAY = 500;
-    private static final int BASE_TIMEOUT_SECONDS = 15;
-    private static final int TIMEOUT_SECONDS_PER_DAY = 5;
-    private static final int MAX_TIMEOUT_SECONDS = 90;
+    // 재조정도 전체 days를 다시 출력하므로 초기 생성과 동일한 실측 기준 예산 사용(잘림 방지).
+    private static final int BASE_MAX_TOKENS = 1500;
+    private static final int TOKENS_PER_DAY = 1600;
+    private static final int BASE_TIMEOUT_SECONDS = 20;
+    private static final int TIMEOUT_SECONDS_PER_DAY = 15;
+    private static final int MAX_TIMEOUT_SECONDS = 180;
 
     private final PromptTemplateService promptTemplateService;
     private final ReorderPromptRenderer promptRenderer;

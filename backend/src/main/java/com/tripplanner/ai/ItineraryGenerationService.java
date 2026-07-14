@@ -26,11 +26,14 @@ public class ItineraryGenerationService {
                     + "설명 문장이나 마크다운 코드펜스(```)는 절대 포함하지 마라.";
 
     private static final int MAX_ATTEMPTS = 2;
-    private static final int BASE_MAX_TOKENS = 800;
-    private static final int TOKENS_PER_DAY = 500;
-    private static final int BASE_TIMEOUT_SECONDS = 15;
-    private static final int TIMEOUT_SECONDS_PER_DAY = 5;
-    private static final int MAX_TIMEOUT_SECONDS = 90;
+    // 실측(나고야 4일, haiku): activity 1개 ≈ 240토큰 × 하루 4~6개 ≈ 일당 1,200토큰 소비.
+    // 일당 500(→900)이었을 때 응답이 max_tokens에서 잘려 미완성 JSON 파싱 실패가 재현됨 → 여유분 포함 1,600/일.
+    private static final int BASE_MAX_TOKENS = 1500;
+    private static final int TOKENS_PER_DAY = 1600;
+    // 실측 출력 속도 ≈ 155tok/s → 토큰 예산에 비례해 타임아웃도 상향
+    private static final int BASE_TIMEOUT_SECONDS = 20;
+    private static final int TIMEOUT_SECONDS_PER_DAY = 15;
+    private static final int MAX_TIMEOUT_SECONDS = 180;
 
     private final PromptTemplateService promptTemplateService;
     private final InitialGenerationPromptRenderer promptRenderer;

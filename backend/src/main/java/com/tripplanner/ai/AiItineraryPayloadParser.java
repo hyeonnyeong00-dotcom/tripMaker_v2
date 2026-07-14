@@ -21,7 +21,8 @@ public class AiItineraryPayloadParser {
         try {
             payload = objectMapper.readValue(cleaned, AiItineraryPayload.class);
         } catch (Exception e) {
-            throw new AiParseException("AI 응답 JSON 파싱 실패", e);
+            throw new AiParseException("AI 응답 JSON 파싱 실패. head=" + snippet(cleaned, true)
+                    + " tail=" + snippet(cleaned, false), e);
         }
 
         if (payload.days() == null || payload.days().size() != expectedDurationDays) {
@@ -42,6 +43,13 @@ public class AiItineraryPayloadParser {
         }
 
         return payload;
+    }
+
+    /** 파싱 실패 진단용 — 응답 머리/꼬리 120자만 로그에 남긴다(전체 덤프 금지). */
+    private String snippet(String text, boolean head) {
+        int n = 120;
+        String s = text.length() <= n ? text : (head ? text.substring(0, n) : text.substring(text.length() - n));
+        return "[" + s.replace("\n", "\\n") + "]";
     }
 
     private String stripMarkdownFence(String raw) {
