@@ -99,6 +99,14 @@
   padding: 10px 14px;
 }
 
+.auth-form-notice {
+  font-size: 13px;
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+  border-radius: var(--radius-button);
+  padding: 10px 14px;
+}
+
 .auth-submit {
   height: 52px;
   border: none;

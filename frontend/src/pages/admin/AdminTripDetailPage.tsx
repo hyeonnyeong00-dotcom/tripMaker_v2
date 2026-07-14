@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getTrip } from '../../api/trips'
 import { extractErrorMessage } from '../../lib/apiError'
-import { AdminHeader } from '../../components/admin/AdminHeader'
+import { AdminLayout } from '../../components/admin/AdminLayout'
 import { TripMap } from '../../components/trip/TripMap'
 import { DayTabs } from '../../components/trip/DayTabs'
 import { RouteWarningBanner } from '../../components/trip/RouteWarningBanner'
@@ -39,32 +39,29 @@ export default function AdminTripDetailPage() {
 
   if (tripQuery.isLoading) {
     return (
-      <>
-        <AdminHeader />
+      <AdminLayout>
         <div className="it-shell">
           <p className="it-status-text">불러오는 중...</p>
         </div>
-      </>
+      </AdminLayout>
     )
   }
 
   if (tripQuery.isError || !trip || !currentDay) {
     return (
-      <>
-        <AdminHeader />
+      <AdminLayout>
         <div className="it-shell">
           <p className="it-status-text">{extractErrorMessage(tripQuery.error, '여행 정보를 불러오지 못했습니다.')}</p>
           <button type="button" className="it-footer-btn it-footer-btn--primary" onClick={() => navigate('/admin')}>
             대시보드로
           </button>
         </div>
-      </>
+      </AdminLayout>
     )
   }
 
   return (
-    <>
-      <AdminHeader />
+    <AdminLayout>
       <div className="it-shell">
         <header className="it-header">
           <div>
@@ -92,6 +89,6 @@ export default function AdminTripDetailPage() {
           <ActivityTimeline activities={currentDay.activities} onReorder={() => {}} readOnly />
         </div>
       </div>
-    </>
+    </AdminLayout>
   )
 }

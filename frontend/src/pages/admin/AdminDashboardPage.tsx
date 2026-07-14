@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getDestinationStats, getFlaggedTrips, listPromptTemplates } from '../../api/admin'
-import { AdminHeader } from '../../components/admin/AdminHeader'
+import { AdminLayout } from '../../components/admin/AdminLayout'
 import { SummaryCards } from '../../components/admin/SummaryCards'
 import { FlaggedTripsTable } from '../../components/admin/FlaggedTripsTable'
 import { DestinationBarChart } from '../../components/admin/DestinationBarChart'
@@ -17,8 +17,7 @@ export default function AdminDashboardPage() {
   const error = flaggedQuery.error ?? statsQuery.error ?? templatesQuery.error
 
   return (
-    <>
-      <AdminHeader />
+    <AdminLayout>
       <div className="ad-shell">
         {isLoading && <p className="ad-status-text">불러오는 중...</p>}
 
@@ -51,6 +50,6 @@ export default function AdminDashboardPage() {
           </>
         )}
       </div>
-    </>
+    </AdminLayout>
   )
 }

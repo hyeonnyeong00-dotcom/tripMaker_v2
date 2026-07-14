@@ -7,6 +7,8 @@ import TripItineraryPage from './pages/TripItineraryPage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminTripDetailPage from './pages/admin/AdminTripDetailPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
+import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 
 function App() {
@@ -53,6 +55,30 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminTripDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/admins"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminUsersPage role="admin" title="관리자 관리" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminUsersPage role="user" title="사용자 관리" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminSettingsPage />
             </ProtectedRoute>
           }
         />

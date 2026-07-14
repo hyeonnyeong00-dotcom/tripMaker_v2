@@ -30,7 +30,7 @@ public class AuthService {
     public MeResponse signup(SignupRequest request) {
         String email = request.email().trim().toLowerCase();
         if (userRepository.existsByEmail(email)) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "이미 가입된 이메일입니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "이미 사용 중인 이메일입니다.");
         }
 
         User user = new User();
@@ -51,6 +51,9 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(ErrorCode.AUTH_ERROR, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
+
+        user.setLastLoginAt(OffsetDateTime.now());
+        userRepository.save(user);
 
         String token = jwtService.issueToken(user.getId(), user.getEmail(), user.getRole());
         return new AuthResponse(token, "Bearer", jwtService.expiresInSeconds(), user.getEmail(), user.getRole());

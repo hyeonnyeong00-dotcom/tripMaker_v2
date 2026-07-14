@@ -36,3 +36,16 @@ export interface PromptTemplate {
   is_active: boolean
   updated_at: string
 }
+
+export interface AdminUser {
+  user_id: string
+  email: string
+  role: 'user' | 'admin'
+  last_login_at: string | null
+  created_at: string
+}
+
+export interface AppSettingResponse {
+  value: string
+  updated_at: string
+}

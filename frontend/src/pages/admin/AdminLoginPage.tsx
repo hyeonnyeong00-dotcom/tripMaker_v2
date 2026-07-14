@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { login } from '../../api/auth'
+import { clearSessionExpiredFlag, readSessionExpiredFlag } from '../../api/client'
 import { saveSession } from '../../lib/session'
 import { extractErrorMessage } from '../../lib/apiError'
 import '../../components/auth/auth.css'
@@ -16,6 +17,8 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [roleError, setRoleError] = useState<string | null>(null)
+  const [sessionExpired] = useState(() => readSessionExpiredFlag())
+  useEffect(() => clearSessionExpiredFlag(), [])
 
   const mutation = useMutation({
     mutationFn: login,
@@ -50,6 +53,10 @@ export default function AdminLoginPage() {
         <p className="auth-subline">운영자 계정으로만 로그인할 수 있어요.</p>
 
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {sessionExpired && (
+            <div className="auth-form-notice">세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.</div>
+          )}
+
           {mutation.isError && (
             <div className="auth-form-error">
               {extractErrorMessage(mutation.error, '로그인에 실패했습니다.')}

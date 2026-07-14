@@ -28,22 +28,34 @@ export default function SignupPage() {
     },
   })
 
+  const [duplicateEmail, setDuplicateEmail] = useState<string | null>(null)
+
   const emailValid = EMAIL_PATTERN.test(email)
   const passwordValid = password.length >= MIN_PASSWORD_LENGTH
   const passwordConfirmValid = passwordConfirm.length > 0 && passwordConfirm === password
-  const canSubmit = emailValid && passwordValid && passwordConfirmValid
+  const isDuplicate = duplicateEmail !== null && email === duplicateEmail
+  const canSubmit = emailValid && passwordValid && passwordConfirmValid && !isDuplicate
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canSubmit) return
-    mutation.mutate({ email, password })
+    mutation.mutate(
+      { email, password },
+      {
+        onError: (error) => {
+          if (extractErrorMessage(error, '').includes('이미 사용 중인 이메일')) {
+            setDuplicateEmail(email)
+          }
+        },
+      },
+    )
   }
 
   return (
     <div className="auth-shell">
       <AuthHeader headline={'환영해요,\n여행을 시작해볼까요?'} subline="이메일과 비밀번호로 간편하게 가입하세요." />
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        {mutation.isError && (
+        {mutation.isError && !isDuplicate && (
           <div className="auth-form-error">
             {extractErrorMessage(mutation.error, '회원가입에 실패했습니다.')}
           </div>
@@ -56,7 +68,7 @@ export default function SignupPage() {
           <input
             id="email"
             type="email"
-            className={`auth-input ${emailTouched && !emailValid ? 'auth-input--error' : ''}`}
+            className={`auth-input ${(emailTouched && !emailValid) || isDuplicate ? 'auth-input--error' : ''}`}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onBlur={() => setEmailTouched(true)}
@@ -66,6 +78,7 @@ export default function SignupPage() {
           {emailTouched && !emailValid && (
             <span className="auth-error-text">올바른 이메일 형식을 입력해 주세요.</span>
           )}
+          {isDuplicate && <span className="auth-error-text">이미 사용 중인 이메일입니다.</span>}
         </div>
 
         <div className="auth-field">
