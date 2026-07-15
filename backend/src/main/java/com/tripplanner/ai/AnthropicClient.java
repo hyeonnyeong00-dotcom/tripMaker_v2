@@ -45,7 +45,7 @@ public class AnthropicClient {
      * 시스템/유저 프롬프트로 Messages API를 호출해 첫 텍스트 블록을 반환한다.
      * 네트워크/타임아웃/비정상 HTTP 상태는 모두 {@link AiCallException}으로 통일한다.
      */
-    public String complete(String systemPrompt, String userPrompt, int maxTokens, Duration timeout) {
+    public AiCallResult complete(String systemPrompt, String userPrompt, int maxTokens, Duration timeout) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("model", model);
         body.put("max_tokens", maxTokens);
@@ -92,7 +92,11 @@ public class AnthropicClient {
             if (!content.isArray() || content.isEmpty()) {
                 throw new AiCallException("AI API 응답에 content가 없음", null);
             }
-            return content.get(0).path("text").asText();
+            // usage.input_tokens/output_tokens는 사용량 로깅용(§ai-usage.log). 없으면 0으로 둔다.
+            JsonNode usage = root.path("usage");
+            int inputTokens = usage.path("input_tokens").asInt(0);
+            int outputTokens = usage.path("output_tokens").asInt(0);
+            return new AiCallResult(content.get(0).path("text").asText(), inputTokens, outputTokens);
         } catch (IOException e) {
             throw new AiCallException("AI API 응답 파싱 실패", e);
         }

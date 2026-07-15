@@ -5,6 +5,7 @@ import com.tripplanner.auth.User;
 import com.tripplanner.auth.UserRepository;
 import com.tripplanner.common.ApiException;
 import com.tripplanner.common.ErrorCode;
+import com.tripplanner.common.ErrorCodes;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -45,11 +46,11 @@ public class AdminUserService {
     @Transactional
     public AdminUserDto updateRole(UUID requesterId, UUID targetId, String newRole) {
         if (requesterId.equals(targetId)) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "본인 계정의 역할은 변경할 수 없습니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ADMIN_SELF_ROLE_CHANGE, "본인 계정의 역할은 변경할 수 없습니다.");
         }
         User target = findOrThrow(targetId);
         if ("admin".equals(target.getRole()) && !"admin".equals(newRole) && userRepository.countByRole("admin") <= 1) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "마지막 관리자 계정의 역할은 변경할 수 없습니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ADMIN_LAST_ROLE_CHANGE, "마지막 관리자 계정의 역할은 변경할 수 없습니다.");
         }
         target.setRole(newRole);
         User saved = userRepository.save(target);
@@ -60,7 +61,7 @@ public class AdminUserService {
     public void resetPassword(UUID targetId) {
         User target = findOrThrow(targetId);
         String defaultPassword = appSettingRepository.findById(RESET_PASSWORD_SETTING_KEY)
-                .orElseThrow(() -> new ApiException(ErrorCode.STORAGE_ERROR, "비밀번호 초기화 설정이 없습니다."))
+                .orElseThrow(() -> new ApiException(ErrorCode.STORAGE_ERROR, ErrorCodes.APP_SETTING_MISSING, "비밀번호 초기화 설정이 없습니다."))
                 .getValue();
         target.setPasswordHash(passwordEncoder.encode(defaultPassword));
         userRepository.save(target);
@@ -69,11 +70,11 @@ public class AdminUserService {
     @Transactional
     public void deleteUser(UUID requesterId, UUID targetId) {
         if (requesterId.equals(targetId)) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "본인 계정은 삭제할 수 없습니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ADMIN_SELF_DELETE, "본인 계정은 삭제할 수 없습니다.");
         }
         User target = findOrThrow(targetId);
         if ("admin".equals(target.getRole()) && userRepository.countByRole("admin") <= 1) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "마지막 관리자 계정은 삭제할 수 없습니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ADMIN_LAST_DELETE, "마지막 관리자 계정은 삭제할 수 없습니다.");
         }
         // trips/itinerary_days/... 는 FK ON DELETE CASCADE로 함께 삭제된다
         userRepository.delete(target);
@@ -81,6 +82,6 @@ public class AdminUserService {
 
     private User findOrThrow(UUID id) {
         return userRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, "존재하지 않는 사용자입니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ADMIN_USER_NOT_FOUND, "존재하지 않는 사용자입니다."));
     }
 }

@@ -37,56 +37,71 @@ public class ReorderGenerationService {
     private final AnthropicClient anthropicClient;
     private final AiItineraryPayloadParser payloadParser;
     private final PartialRegenerationValidator partialRegenerationValidator;
+    private final AiUsageLogger aiUsageLogger;
 
     public ReorderGenerationService(
             PromptTemplateService promptTemplateService,
             ReorderPromptRenderer promptRenderer,
             AnthropicClient anthropicClient,
             AiItineraryPayloadParser payloadParser,
-            PartialRegenerationValidator partialRegenerationValidator) {
+            PartialRegenerationValidator partialRegenerationValidator,
+            AiUsageLogger aiUsageLogger) {
         this.promptTemplateService = promptTemplateService;
         this.promptRenderer = promptRenderer;
         this.anthropicClient = anthropicClient;
         this.payloadParser = payloadParser;
         this.partialRegenerationValidator = partialRegenerationValidator;
+        this.aiUsageLogger = aiUsageLogger;
     }
 
-    public AiDayPayload generate(AiItineraryPayload original, int changedDay, List<String> newActivityOrder) {
+    public AiDayPayload generate(
+            String tripId, AiItineraryPayload original, int changedDay, List<String> newActivityOrder) {
         PromptTemplate template = promptTemplateService.loadActive("reorder");
         String userPrompt = promptRenderer.render(template, original, changedDay, newActivityOrder);
         int durationDays = original.days().size();
         int maxTokens = BASE_MAX_TOKENS + TOKENS_PER_DAY * durationDays;
         Duration timeout = Duration.ofSeconds(
                 Math.min(MAX_TIMEOUT_SECONDS, BASE_TIMEOUT_SECONDS + TIMEOUT_SECONDS_PER_DAY * durationDays));
+        String templateName = template.getName();
+        int templateVersion = template.getVersion();
 
         AiCallException lastCallException = null;
         AiParseException lastParseException = null;
         PartialRegenerationViolationException lastViolation = null;
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            String raw;
+            long startNanos = System.nanoTime();
+            AiCallResult result;
             try {
-                raw = anthropicClient.complete(SYSTEM_PROMPT, userPrompt, maxTokens, timeout);
+                result = anthropicClient.complete(SYSTEM_PROMPT, userPrompt, maxTokens, timeout);
             } catch (AiCallException e) {
+                aiUsageLogger.logCall(tripId, templateName, templateVersion, null, null,
+                        elapsedMs(startNanos), false, e.code());
                 lastCallException = e;
                 log.warn("재조정 AI 호출 실패 (attempt {}/{})", attempt, MAX_ATTEMPTS, e);
                 continue;
             }
 
+            long elapsedMs = elapsedMs(startNanos);
             AiItineraryPayload candidate;
             try {
-                candidate = payloadParser.parse(raw, durationDays);
+                candidate = payloadParser.parse(result.text(), durationDays);
             } catch (AiParseException e) {
+                aiUsageLogger.logCall(tripId, templateName, templateVersion,
+                        result.inputTokens(), result.outputTokens(), elapsedMs, false, e.code());
                 lastParseException = e;
                 log.warn("재조정 AI 응답 파싱/검증 실패 (attempt {}/{})", attempt, MAX_ATTEMPTS, e);
                 continue;
             }
 
+            // 아래 위반 판정은 토큰을 이미 소비한 호출이므로, 실패해도 사용량 로그에는 토큰과 ERR_042를 남긴다.
             List<Integer> violatingDays =
                     partialRegenerationValidator.findViolatingDays(original.days(), candidate.days(), changedDay);
             if (!violatingDays.isEmpty()) {
                 lastViolation = new PartialRegenerationViolationException(
                         "요청하지 않은 day가 원본과 다름: " + violatingDays);
+                aiUsageLogger.logCall(tripId, templateName, templateVersion,
+                        result.inputTokens(), result.outputTokens(), elapsedMs, false, lastViolation.code());
                 log.warn("부분 재생성 위반 (attempt {}/{}): violatingDays={}", attempt, MAX_ATTEMPTS, violatingDays);
                 continue;
             }
@@ -97,6 +112,8 @@ public class ReorderGenerationService {
                     .orElse(null);
             if (changedDayPayload == null) {
                 lastViolation = new PartialRegenerationViolationException("AI 응답에 요청한 day가 없음: day=" + changedDay);
+                aiUsageLogger.logCall(tripId, templateName, templateVersion,
+                        result.inputTokens(), result.outputTokens(), elapsedMs, false, lastViolation.code());
                 log.warn("재조정 응답에 대상 day 누락 (attempt {}/{}): day={}", attempt, MAX_ATTEMPTS, changedDay);
                 continue;
             }
@@ -106,10 +123,14 @@ public class ReorderGenerationService {
             if (!returnedOrder.equals(newActivityOrder)) {
                 lastViolation = new PartialRegenerationViolationException(
                         "AI가 사용자가 정한 활동 순서를 임의로 변경함: expected=" + newActivityOrder + " actual=" + returnedOrder);
+                aiUsageLogger.logCall(tripId, templateName, templateVersion,
+                        result.inputTokens(), result.outputTokens(), elapsedMs, false, lastViolation.code());
                 log.warn("재조정 순서 임의 변경 감지 (attempt {}/{})", attempt, MAX_ATTEMPTS);
                 continue;
             }
 
+            aiUsageLogger.logCall(tripId, templateName, templateVersion,
+                    result.inputTokens(), result.outputTokens(), elapsedMs, true, null);
             return changedDayPayload;
         }
 
@@ -120,5 +141,9 @@ public class ReorderGenerationService {
             throw lastParseException;
         }
         throw lastCallException;
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000;
     }
 }

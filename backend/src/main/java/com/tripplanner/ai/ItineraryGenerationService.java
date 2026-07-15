@@ -57,6 +57,7 @@ public class ItineraryGenerationService {
     private final CacheKeyGenerator cacheKeyGenerator;
     private final AiResponseCacheService cacheService;
     private final AiItineraryPayloadParser payloadParser;
+    private final AiUsageLogger aiUsageLogger;
 
     public ItineraryGenerationService(
             PromptTemplateService promptTemplateService,
@@ -64,13 +65,15 @@ public class ItineraryGenerationService {
             AnthropicClient anthropicClient,
             CacheKeyGenerator cacheKeyGenerator,
             AiResponseCacheService cacheService,
-            AiItineraryPayloadParser payloadParser) {
+            AiItineraryPayloadParser payloadParser,
+            AiUsageLogger aiUsageLogger) {
         this.promptTemplateService = promptTemplateService;
         this.promptRenderer = promptRenderer;
         this.anthropicClient = anthropicClient;
         this.cacheKeyGenerator = cacheKeyGenerator;
         this.cacheService = cacheService;
         this.payloadParser = payloadParser;
+        this.aiUsageLogger = aiUsageLogger;
     }
 
     public AiItineraryPayload generate(
@@ -97,6 +100,8 @@ public class ItineraryGenerationService {
         Optional<AiItineraryPayload> cached = cacheService.lookup(cacheKey);
         if (cached.isPresent()) {
             log.info("AI 응답 캐시 히트, AI 미호출. cacheKey={}", cacheKey);
+            // 초기 생성은 이 시점에 trip이 아직 없어 trip_id는 "-"로 기록한다
+            aiUsageLogger.logCacheHit(null);
             return cached.get();
         }
         log.info("AI 응답 캐시 미스, AI 직접 호출 진행. cacheKey={}", cacheKey);
@@ -145,7 +150,8 @@ public class ItineraryGenerationService {
         int maxTokens = BASE_MAX_TOKENS + TOKENS_PER_DAY * segmentDays;
         Duration timeout = Duration.ofSeconds(
                 Math.min(MAX_TIMEOUT_SECONDS, BASE_TIMEOUT_SECONDS + TIMEOUT_SECONDS_PER_DAY * segmentDays));
-        return callAndParseWithRetry(userPrompt, maxTokens, timeout, segmentDays);
+        return callAndParseWithRetry(userPrompt, maxTokens, timeout, segmentDays,
+                template.getName(), template.getVersion());
     }
 
     /**
@@ -269,23 +275,34 @@ public class ItineraryGenerationService {
     }
 
     private AiItineraryPayload callAndParseWithRetry(
-            String userPrompt, int maxTokens, Duration timeout, int durationDays) {
+            String userPrompt, int maxTokens, Duration timeout, int durationDays,
+            String templateName, int templateVersion) {
         AiCallException lastCallException = null;
         AiParseException lastParseException = null;
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            String raw;
+            // 초기 생성은 trip이 아직 없어 사용량 로그의 trip_id는 "-"(null)로 남긴다
+            long startNanos = System.nanoTime();
+            AiCallResult result;
             try {
-                raw = anthropicClient.complete(SYSTEM_PROMPT, userPrompt, maxTokens, timeout);
+                result = anthropicClient.complete(SYSTEM_PROMPT, userPrompt, maxTokens, timeout);
             } catch (AiCallException e) {
+                aiUsageLogger.logCall(null, templateName, templateVersion, null, null,
+                        elapsedMs(startNanos), false, e.code());
                 lastCallException = e;
                 log.warn("AI 호출 실패 (attempt {}/{})", attempt, MAX_ATTEMPTS, e);
                 continue;
             }
 
+            long elapsedMs = elapsedMs(startNanos);
             try {
-                return payloadParser.parse(raw, durationDays);
+                AiItineraryPayload parsed = payloadParser.parse(result.text(), durationDays);
+                aiUsageLogger.logCall(null, templateName, templateVersion,
+                        result.inputTokens(), result.outputTokens(), elapsedMs, true, null);
+                return parsed;
             } catch (AiParseException e) {
+                aiUsageLogger.logCall(null, templateName, templateVersion,
+                        result.inputTokens(), result.outputTokens(), elapsedMs, false, e.code());
                 lastParseException = e;
                 log.warn("AI 응답 파싱/검증 실패 (attempt {}/{})", attempt, MAX_ATTEMPTS, e);
             }
@@ -295,5 +312,9 @@ public class ItineraryGenerationService {
             throw lastParseException;
         }
         throw lastCallException;
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000;
     }
 }

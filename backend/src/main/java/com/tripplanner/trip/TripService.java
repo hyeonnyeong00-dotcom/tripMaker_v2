@@ -15,6 +15,7 @@ import com.tripplanner.auth.User;
 import com.tripplanner.auth.UserRepository;
 import com.tripplanner.common.ApiException;
 import com.tripplanner.common.ErrorCode;
+import com.tripplanner.common.ErrorCodes;
 import com.tripplanner.trip.dto.ActivityResponseDto;
 import com.tripplanner.trip.dto.DayResponseDto;
 import com.tripplanner.trip.dto.MetaDto;
@@ -96,15 +97,15 @@ public class TripService {
      */
     public TripResponse createTrip(UUID userId, TripCreateRequest request) {
         if (request.endDate().isBefore(request.startDate())) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "end_date는 start_date보다 이후여야 합니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.TRIP_DATE_INVERTED, "end_date는 start_date보다 이후여야 합니다.");
         }
         int durationDays = (int) ChronoUnit.DAYS.between(request.startDate(), request.endDate()) + 1;
         if (durationDays > MAX_TRIP_DURATION_DAYS) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "여행 기간은 최대 30일까지 선택 가능합니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.TRIP_DURATION_EXCEEDED, "여행 기간은 최대 30일까지 선택 가능합니다.");
         }
         // §3.2: 예산 상·하한 역전 방지(상한 NULL = 상한 없음이므로 검사 제외)
         if (request.budgetMax() != null && request.budgetMax() < request.budgetMin()) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "예산 최대값은 최소값보다 크거나 같아야 합니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.BUDGET_RANGE_INVERTED, "예산 최대값은 최소값보다 크거나 같아야 합니다.");
         }
 
         String destination = request.destination().trim();
@@ -113,7 +114,7 @@ public class TripService {
         LocalTime activeEndTime = parseTimeOrDefault(request.activeEndTime(), DEFAULT_ACTIVE_END_TIME);
         // §3.3: 활동 시작 시간이 종료 시간보다 이르지 않으면 유효 범위가 없음
         if (!activeStartTime.isBefore(activeEndTime)) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "활동 종료 시간은 시작 시간보다 늦어야 합니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ACTIVE_TIME_INVERTED, "활동 종료 시간은 시작 시간보다 늦어야 합니다.");
         }
 
         AiItineraryPayload payload;
@@ -130,7 +131,7 @@ public class TripService {
                     activeEndTime.format(TIME_OUTPUT_FORMATTER));
         } catch (AiCallException | AiParseException e) {
             log.error("일정 생성 실패: destination={} durationDays={}", destination, durationDays, e);
-            throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 일정 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            throw new ApiException(ErrorCode.GENERATION_FAILED, ErrorCodes.ITINERARY_GENERATION_FAILED, "AI 일정 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
         }
 
         return self.persistNewTrip(userId, request, destination, companion, durationDays,
@@ -149,7 +150,7 @@ public class TripService {
             LocalTime activeEndTime,
             AiItineraryPayload payload) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, ErrorCodes.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
         OffsetDateTime now = OffsetDateTime.now();
         Trip trip = new Trip();
@@ -219,11 +220,11 @@ public class TripService {
 
         AiDayPayload changedDayPayload;
         try {
-            changedDayPayload =
-                    reorderGenerationService.generate(ctx.originalPayload(), ctx.day(), request.newActivityOrder());
+            changedDayPayload = reorderGenerationService.generate(
+                    tripId.toString(), ctx.originalPayload(), ctx.day(), request.newActivityOrder());
         } catch (AiCallException | AiParseException | PartialRegenerationViolationException e) {
             log.error("재조정 실패: tripId={} day={}", tripId, ctx.day(), e);
-            throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 재조정에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            throw new ApiException(ErrorCode.GENERATION_FAILED, ErrorCodes.REORDER_FAILED, "AI 재조정에 실패했습니다. 잠시 후 다시 시도해주세요.");
         }
 
         boolean flagged = routeWarningRuleChecker.isInefficient(changedDayPayload.activities());
@@ -240,14 +241,14 @@ public class TripService {
     @Transactional(readOnly = true)
     public ReorderContext loadReorderContext(UUID userId, UUID tripId, ReorderRequest request) {
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.TRIP_NOT_FOUND, "여행을 찾을 수 없습니다."));
         if (!trip.getUser().getId().equals(userId)) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+            throw new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.NOT_RESOURCE_OWNER, "이 여행에 접근할 권한이 없습니다.");
         }
 
         int day = request.day();
         ItineraryDay targetDay = itineraryDayRepository.findByTripIdAndDayNumber(tripId, day)
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, "day가 유효한 범위를 벗어났습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.DAY_OUT_OF_RANGE, "day가 유효한 범위를 벗어났습니다."));
 
         List<ItineraryDay> allDays = itineraryDayRepository.findByTripIdOrderByDayNumberAsc(tripId);
         List<AiDayPayload> originalDayPayloads = new ArrayList<>();
@@ -267,7 +268,7 @@ public class TripService {
         }
         Set<String> requestedKeys = new HashSet<>(request.newActivityOrder());
         if (requestedKeys.size() != request.newActivityOrder().size() || !requestedKeys.equals(existingKeys)) {
-            throw new ApiException(ErrorCode.VALIDATION_ERROR, "new_activity_order가 해당 day의 활동과 일치하지 않습니다.");
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ACTIVITY_ORDER_MISMATCH, "new_activity_order가 해당 day의 활동과 일치하지 않습니다.");
         }
 
         AiItineraryPayload originalPayload = new AiItineraryPayload(
@@ -280,12 +281,12 @@ public class TripService {
     public TripResponse persistReorder(
             UUID userId, UUID tripId, int day, AiDayPayload changedDayPayload, boolean flagged, String reason) {
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.TRIP_NOT_FOUND, "여행을 찾을 수 없습니다."));
         if (!trip.getUser().getId().equals(userId)) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+            throw new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.NOT_RESOURCE_OWNER, "이 여행에 접근할 권한이 없습니다.");
         }
         ItineraryDay targetDay = itineraryDayRepository.findByTripIdAndDayNumber(tripId, day)
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, "day가 유효한 범위를 벗어났습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.DAY_OUT_OF_RANGE, "day가 유효한 범위를 벗어났습니다."));
 
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -331,10 +332,10 @@ public class TripService {
     @Transactional(readOnly = true)
     public TripResponse getTrip(UUID userId, UUID tripId, boolean isAdmin) {
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.TRIP_NOT_FOUND, "여행을 찾을 수 없습니다."));
 
         if (!isAdmin && !trip.getUser().getId().equals(userId)) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+            throw new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.NOT_RESOURCE_OWNER, "이 여행에 접근할 권한이 없습니다.");
         }
 
         return buildTripResponse(trip);
@@ -343,9 +344,9 @@ public class TripService {
     @Transactional
     public void deleteTrip(UUID userId, UUID tripId) {
         Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.TRIP_NOT_FOUND, "여행을 찾을 수 없습니다."));
         if (!trip.getUser().getId().equals(userId)) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
+            throw new ApiException(ErrorCode.FORBIDDEN, ErrorCodes.NOT_RESOURCE_OWNER, "이 여행에 접근할 권한이 없습니다.");
         }
         // days/activities/revisions는 FK ON DELETE CASCADE로 함께 삭제된다
         tripRepository.delete(trip);
@@ -438,7 +439,7 @@ public class TripService {
             revision.setCreatedAt(OffsetDateTime.now());
             tripRevisionRepository.save(revision);
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.STORAGE_ERROR, "여행 이력 저장에 실패했습니다.");
+            throw new ApiException(ErrorCode.STORAGE_ERROR, ErrorCodes.REVISION_SAVE_FAILED, "여행 이력 저장에 실패했습니다.");
         }
     }
 

@@ -68,12 +68,18 @@ AI 기반 여행 일정 플래너. 목적지/기간/예산/취향 입력 → AI�
 - `GET/PUT /api/admin/settings/reset-password` — 초기화 기본 비밀번호 조회/수정
 - 관리자 API는 `role=admin`만, user는 403
 
-**에러 형식(공통):** `{ "error": "VALIDATION_ERROR|GENERATION_FAILED|AUTH_ERROR|FORBIDDEN|STORAGE_ERROR|INTERNAL_ERROR", "message": "..." }`
-(400 / 502 / 401 / 403 / 503 / 500 순 매핑)
+**에러 형식(공통):** `{ "error": "VALIDATION_ERROR|GENERATION_FAILED|AUTH_ERROR|FORBIDDEN|STORAGE_ERROR|INTERNAL_ERROR", "code": "ERR_xxx", "message": "..." }`
+(error→HTTP: 400 / 502 / 401 / 403 / 503 / 500 순 매핑)
+- **`error` 필드와 HTTP 상태 매핑은 변경 금지**(프론트 분기 기준). 원인 세분화는 `code`("ERR_xxx")로만 추가한다.
+  전체 코드 표는 `docs/error-codes.md`, 상수 정의는 `common/ErrorCodes.java`. 새 에러 지점은 알맞은 대역의 코드를 반드시 부여.
 - **모든 응답은 위 계약을 벗어나면 안 된다.** `GlobalExceptionHandler`에 최종 안전망을 둔다:
-  Spring `DataAccessException`(DB 장애/제약 위반) → `STORAGE_ERROR(503)`, 그 외 처리되지 않은 예외 → `INTERNAL_ERROR(500)`.
+  Spring `DataAccessException`(DB 장애/제약 위반) → `STORAGE_ERROR(503)`/`ERR_060`, 그 외 처리되지 않은 예외 → `INTERNAL_ERROR(500)`/`ERR_000`.
   두 경우 모두 원인/스택은 **로그에만** 남기고 클라이언트에는 일반 메시지만 노출한다(내부 정보 누출 금지).
-- 서비스 계층은 예상 가능한 실패만 도메인 `ApiException`으로 명시 매핑하고, 나머지는 위 안전망에 위임한다.
+- 서비스 계층은 예상 가능한 실패만 도메인 `ApiException(errorCode, code, message)`으로 명시 매핑하고, 나머지는 위 안전망에 위임한다.
+
+**로깅(logback-spring.xml):** `backend/logs/error.log`(WARN↑, 각 줄에 `[ERR_xxx]` 포함) / `backend/logs/ai-usage.log`
+(`ai-usage` 로거 전용, AI 호출·캐시 히트마다 한 줄: 시각·trip_id·템플릿명/버전·캐시히트·입출력 토큰·소요ms·성공여부). 둘 다 일 롤링 14일 보관.
+**보안 불변식:** API 키·비밀번호·프롬프트/응답 본문 전체는 어떤 로그에도 남기지 않는다(템플릿은 이름+버전만).
 
 **여행 기간 제한:** duration_days는 최대 30(29박 30일)까지만 허용. 초과 시 400 VALIDATION_ERROR
 (프론트에서 캘린더 선택 시점에 막는 것과 별개로, 백엔드도 동일 검증을 반드시 수행)

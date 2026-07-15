@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tripplanner.ai.AiResponseCache;
 import com.tripplanner.ai.AiResponseCacheRepository;
 import com.tripplanner.ai.dto.AiItineraryPayload;
+import com.tripplanner.common.ErrorCodes;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -47,7 +48,7 @@ public class AiResponseCacheService {
 
             return Optional.of(objectMapper.readValue(row.getResponseJson(), AiItineraryPayload.class));
         } catch (Exception e) {
-            log.warn("cache lookup 실패, AI 직접 호출로 폴백. cacheKey={}", cacheKey, e);
+            log.warn("[{}] cache lookup 실패, AI 직접 호출로 폴백. cacheKey={}", ErrorCodes.CACHE_LOOKUP_FAILED, cacheKey, e);
             return Optional.empty();
         }
     }
@@ -65,9 +66,9 @@ public class AiResponseCacheService {
             row.setCreatedAt(OffsetDateTime.now());
             repository.save(row);
         } catch (JsonProcessingException e) {
-            log.warn("cache upsert 실패(직렬화 오류) cacheKey={}", cacheKey, e);
+            log.warn("[{}] cache upsert 실패(직렬화 오류) cacheKey={}", ErrorCodes.CACHE_UPSERT_FAILED, cacheKey, e);
         } catch (Exception e) {
-            log.warn("cache upsert 실패 cacheKey={}", cacheKey, e);
+            log.warn("[{}] cache upsert 실패 cacheKey={}", ErrorCodes.CACHE_UPSERT_FAILED, cacheKey, e);
         }
     }
 }

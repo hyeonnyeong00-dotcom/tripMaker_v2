@@ -2,6 +2,7 @@ package com.tripplanner.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tripplanner.common.ErrorCode;
+import com.tripplanner.common.ErrorCodes;
 import com.tripplanner.common.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +30,6 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(
-                ErrorResponse.of(ErrorCode.AUTH_ERROR, "인증이 필요합니다.")));
+                ErrorResponse.of(ErrorCode.AUTH_ERROR, ErrorCodes.SESSION_EXPIRED, "인증이 필요합니다.")));
     }
 }

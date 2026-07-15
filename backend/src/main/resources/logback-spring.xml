@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  파일 로깅 정책:
+  - logs/error.log     : WARN 이상만(ThresholdFilter). 메시지에 ERR_ 코드가 함께 실린다(핸들러/서비스에서 [{code}] 형식으로 기록).
+  - logs/ai-usage.log  : ai-usage named logger 전용(additivity=false). AI 호출/캐시 히트마다 한 줄. 앞에 시각이 붙는다.
+  둘 다 일 단위 롤링, 14일 보관. logs/ 디렉터리는 .gitignore(backend/logs/)에 등록됨.
+  보안: 프롬프트 본문/API 키/비밀번호는 어떤 appender에도 남기지 않는다(코드에서 애초에 로깅하지 않음).
+-->
+<configuration>
+
+    <property name="LOG_DIR" value="logs"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/error.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>14</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="AI_USAGE_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/ai-usage.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/ai-usage.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>14</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSS} | %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- AI 사용량 전용 로거: 콘솔/에러 로그로 전파하지 않고 ai-usage.log에만 적재 -->
+    <logger name="ai-usage" level="INFO" additivity="false">
+        <appender-ref ref="AI_USAGE_FILE"/>
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ERROR_FILE"/>
+    </root>
+
+</configuration>

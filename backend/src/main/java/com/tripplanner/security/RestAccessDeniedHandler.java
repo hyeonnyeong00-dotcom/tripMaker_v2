@@ -2,6 +2,7 @@ package com.tripplanner.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tripplanner.common.ErrorCode;
+import com.tripplanner.common.ErrorCodes;
 import com.tripplanner.common.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +30,6 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(
-                ErrorResponse.of(ErrorCode.FORBIDDEN, "접근 권한이 없습니다.")));
+                ErrorResponse.of(ErrorCode.FORBIDDEN, ErrorCodes.FORBIDDEN_ROLE, "접근 권한이 없습니다.")));
     }
 }

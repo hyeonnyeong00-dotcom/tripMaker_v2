@@ -5,6 +5,7 @@ import com.tripplanner.ai.PromptTemplate;
 import com.tripplanner.ai.PromptTemplateRepository;
 import com.tripplanner.common.ApiException;
 import com.tripplanner.common.ErrorCode;
+import com.tripplanner.common.ErrorCodes;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +42,7 @@ public class AdminPromptTemplateService {
 
     private PromptTemplate findOrThrow(UUID id) {
         return promptTemplateRepository.findById(id)
-                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, "존재하지 않는 템플릿입니다."));
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, ErrorCodes.ADMIN_TEMPLATE_NOT_FOUND, "존재하지 않는 템플릿입니다."));
     }
 
     private PromptTemplateDto toDto(PromptTemplate template) {
