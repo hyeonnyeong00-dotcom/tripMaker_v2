@@ -15,7 +15,8 @@ spring:
     baseline-on-migrate: true
 
 server:
-  port: 8080
+  # Render 등 PaaS는 PORT 환경변수로 리슨 포트를 주입한다. 로컬은 8080 기본값.
+  port: ${PORT:8080}
 
 app:
   cors:

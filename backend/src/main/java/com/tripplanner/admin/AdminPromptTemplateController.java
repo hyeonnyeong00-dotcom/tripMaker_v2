@@ -2,6 +2,7 @@ package com.tripplanner.admin;
 
 import com.tripplanner.admin.dto.PromptTemplateDto;
 import com.tripplanner.admin.dto.PromptTemplateUpdateRequest;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "Admin - Prompt Templates", description = "프롬프트 템플릿 조회/수정/버전 관리 (admin 전용)")
 @RestController
 @RequestMapping("/api/admin/prompt-templates")
 public class AdminPromptTemplateController {
