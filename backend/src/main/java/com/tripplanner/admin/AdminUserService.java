@@ -39,6 +39,9 @@ public class AdminUserService {
                 .toList();
     }
 
+    // 참고(§3.7): "마지막 admin" 보호는 countByRole 확인 후 수정/삭제로 원자적이지 않다(TOCTOU).
+    // 단일 인스턴스·관리자 전용(§1) 전제라 실질 경합 위험이 없어 잠금은 두지 않는다. 다중 인스턴스로
+    // 확장하면 SELECT ... FOR UPDATE 또는 부분 유니크 제약으로 원자성을 보장해야 한다.
     @Transactional
     public AdminUserDto updateRole(UUID requesterId, UUID targetId, String newRole) {
         if (requesterId.equals(targetId)) {

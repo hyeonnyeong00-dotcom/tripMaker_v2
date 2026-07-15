@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 public class RouteWarningRuleChecker {
 
     private static final double EARTH_RADIUS_KM = 6371.0;
+    // 연속한 두 활동의 직선거리 임계값. 도심 관광 동선에서 한 구간 8km(대략 택시 15~25분)를 넘으면
+    // "동선이 비효율적일 수 있다"는 참고 배지를 띄우는 경험적 기준(Directions API 미사용, 직선거리 근사).
     private static final double MAX_LEG_DISTANCE_KM = 8.0;
 
     public static final String DEFAULT_REASON = "이동 거리가 길어 동선이 비효율적일 수 있어요";

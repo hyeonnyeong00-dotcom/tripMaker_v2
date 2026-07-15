@@ -38,6 +38,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Claims claims = jwtService.parseClaims(token);
                 String userId = claims.getSubject();
                 String role = claims.get("role", String.class);
+                // role 클레임 누락 시 NPE는 이 필터에서 터져 @RestControllerAdvice가 못 잡으므로(필터 단계),
+                // 미인증으로 처리해 표준 401 흐름(RestAuthenticationEntryPoint)으로 넘긴다.
+                if (userId == null || role == null) {
+                    SecurityContextHolder.clearContext();
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
                 var authentication = new UsernamePasswordAuthenticationToken(userId, null, authorities);

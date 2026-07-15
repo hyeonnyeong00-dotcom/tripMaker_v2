@@ -117,7 +117,8 @@ export default function TripItineraryPage() {
   }
 
   function handleSave() {
-    window.alert('저장은 이미 완료되어 있어요. 저장한 여행 목록은 다음 마일스톤에서 구현됩니다.')
+    // 일정은 생성/재조정 시점에 이미 서버에 저장돼 있다. 저장한 여행 목록으로 이동해 확인시킨다.
+    navigate('/')
   }
 
   return (

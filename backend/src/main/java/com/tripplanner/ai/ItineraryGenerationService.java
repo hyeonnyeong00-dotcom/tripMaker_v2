@@ -46,7 +46,9 @@ public class ItineraryGenerationService {
     private static final int SINGLE_CALL_MAX_DAYS = 7;
     private static final int MAX_DAYS_PER_CHUNK = 6;
 
-    /** 청크 병렬 호출용 공용 풀. 단일 인스턴스 전제(§1)라 최대 동시 호출만 제한한다. */
+    // 청크 병렬 호출용 공용 풀. 단일 인스턴스 전제(§1)라 최대 동시 호출만 제한한다.
+    // 애플리케이션 수명과 동일하게 살아 있고 요청 간 재사용되므로 별도 shutdown 훅은 두지 않는다
+    // (JVM 종료 시 함께 정리; graceful shutdown이 필요해지면 @PreDestroy로 shutdown 추가할 것).
     private final ExecutorService chunkExecutor = Executors.newFixedThreadPool(5);
 
     private final PromptTemplateService promptTemplateService;
@@ -215,6 +217,8 @@ public class ItineraryGenerationService {
             List<AiActivityPayload> fixedActivities = new ArrayList<>();
             for (AiActivityPayload act : day.activities()) {
                 String time = act.time();
+                // time/activeStart/activeEnd 모두 "HH:mm" 24시간 표기라 사전식(String.compareTo) 비교가
+                // 곧 시간 순서 비교와 일치한다(자정을 넘기는 일정은 없다는 전제 — active_end는 항상 같은 날).
                 if (time != null && time.compareTo(activeStartTime) < 0) {
                     time = activeStartTime;
                 } else if (time != null && time.compareTo(activeEndTime) > 0) {
@@ -253,10 +257,13 @@ public class ItineraryGenerationService {
                 mergedDays.add(new AiDayPayload(globalDay, day.theme(), renumbered, day.routeWarning()));
             }
         }
-        // 첫 청크 summary를 대표로 쓰되, 모델이 구간 일수("6일" 등)를 언급했으면 전체 일수로 정정
+        // 첫 청크 summary를 대표로 쓰되, 모델이 구간 일수("5박 6일"/"6일" 등)를 언급했으면 전체 일수로 정정한다.
+        // 과거의 무차별 `\d+일` 치환은 "3일차" 같은 서수 표현까지 훼손했으므로, 여행 길이 표현만 좁혀서 치환한다:
+        //   1) "N박 M일" → "(전체-1)박 전체일"  2) 남은 단독 "M일" → "전체일" (단, "일차/일째/일간"은 서수/기간이므로 제외)
         String summary = chunks.get(0).summary();
         if (summary != null) {
-            summary = summary.replaceAll("\\d+일", durationDays + "일");
+            summary = summary.replaceAll("\\d+\\s*박\\s*\\d+\\s*일", (durationDays - 1) + "박 " + durationDays + "일");
+            summary = summary.replaceAll("\\d+\\s*일(?!차|째|간)", durationDays + "일");
         }
         return new AiItineraryPayload(destination, durationDays, summary, mergedDays);
     }

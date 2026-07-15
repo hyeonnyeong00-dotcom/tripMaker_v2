@@ -68,11 +68,21 @@ AI 기반 여행 일정 플래너. 목적지/기간/예산/취향 입력 → AI�
 - `GET/PUT /api/admin/settings/reset-password` — 초기화 기본 비밀번호 조회/수정
 - 관리자 API는 `role=admin`만, user는 403
 
-**에러 형식(공통):** `{ "error": "VALIDATION_ERROR|GENERATION_FAILED|AUTH_ERROR|FORBIDDEN|STORAGE_ERROR", "message": "..." }`
-(400 / 502 / 401 / 403 / 503 순 매핑)
+**에러 형식(공통):** `{ "error": "VALIDATION_ERROR|GENERATION_FAILED|AUTH_ERROR|FORBIDDEN|STORAGE_ERROR|INTERNAL_ERROR", "message": "..." }`
+(400 / 502 / 401 / 403 / 503 / 500 순 매핑)
+- **모든 응답은 위 계약을 벗어나면 안 된다.** `GlobalExceptionHandler`에 최종 안전망을 둔다:
+  Spring `DataAccessException`(DB 장애/제약 위반) → `STORAGE_ERROR(503)`, 그 외 처리되지 않은 예외 → `INTERNAL_ERROR(500)`.
+  두 경우 모두 원인/스택은 **로그에만** 남기고 클라이언트에는 일반 메시지만 노출한다(내부 정보 누출 금지).
+- 서비스 계층은 예상 가능한 실패만 도메인 `ApiException`으로 명시 매핑하고, 나머지는 위 안전망에 위임한다.
 
 **여행 기간 제한:** duration_days는 최대 30(29박 30일)까지만 허용. 초과 시 400 VALIDATION_ERROR
 (프론트에서 캘린더 선택 시점에 막는 것과 별개로, 백엔드도 동일 검증을 반드시 수행)
+
+**입력 교차 검증(백엔드 필수, 400 VALIDATION_ERROR):** ① `budget_max`가 NULL이 아니면 `budget_max >= budget_min`,
+② `active_start_time < active_end_time`. 프론트 UI 제약과 별개로 백엔드에서도 반드시 검증(역전 범위가 AI 프롬프트로 전달되는 것 방지).
+
+**AI 호출과 트랜잭션 분리(성능/안정성 필수):** 최초 생성·재조정의 AI 호출(수십 초 소요 가능)은 **DB 트랜잭션 밖**에서 수행한다.
+읽기(원본 로드/검증) → AI 호출(트랜잭션 없음) → 쓰기(영속화) 3단으로 분리해, AI 응답 대기 동안 DB 커넥션을 점유하지 않는다.
 
 **activity 스키마 확장(지도용):** 각 activity에 `lat: number`, `lng: number` 필수 포함.
 AI 생성 시 실제 장소의 근사 좌표를 함께 반환하도록 프롬프트에 명시.

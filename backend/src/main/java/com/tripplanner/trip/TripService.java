@@ -35,6 +35,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +63,9 @@ public class TripService {
     private final ItineraryActivityRepository itineraryActivityRepository;
     private final TripRevisionRepository tripRevisionRepository;
     private final ObjectMapper objectMapper;
+    // 자기 자신의 프록시 참조. 오케스트레이터(비트랜잭션)에서 @Transactional 영속화 메서드를 호출할 때
+    // 프록시를 거쳐야 트랜잭션 경계가 적용되므로 self-injection한다(@Lazy로 순환 의존 해소). §3.1 참고.
+    private final TripService self;
 
     public TripService(
             ItineraryGenerationService itineraryGenerationService,
@@ -72,7 +76,9 @@ public class TripService {
             ItineraryDayRepository itineraryDayRepository,
             ItineraryActivityRepository itineraryActivityRepository,
             TripRevisionRepository tripRevisionRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            @Lazy TripService self) {
+        this.self = self;
         this.itineraryGenerationService = itineraryGenerationService;
         this.reorderGenerationService = reorderGenerationService;
         this.routeWarningRuleChecker = routeWarningRuleChecker;
@@ -84,7 +90,10 @@ public class TripService {
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
+    /**
+     * 최초 생성 오케스트레이션. AI 호출은 수십 초가 걸릴 수 있어 <b>트랜잭션 밖</b>에서 수행하고(§3.1: DB 커넥션
+     * 장시간 점유 방지), 검증 통과 후 영속화만 별도 트랜잭션({@link #persistNewTrip})으로 처리한다.
+     */
     public TripResponse createTrip(UUID userId, TripCreateRequest request) {
         if (request.endDate().isBefore(request.startDate())) {
             throw new ApiException(ErrorCode.VALIDATION_ERROR, "end_date는 start_date보다 이후여야 합니다.");
@@ -93,14 +102,19 @@ public class TripService {
         if (durationDays > MAX_TRIP_DURATION_DAYS) {
             throw new ApiException(ErrorCode.VALIDATION_ERROR, "여행 기간은 최대 30일까지 선택 가능합니다.");
         }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
+        // §3.2: 예산 상·하한 역전 방지(상한 NULL = 상한 없음이므로 검사 제외)
+        if (request.budgetMax() != null && request.budgetMax() < request.budgetMin()) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "예산 최대값은 최소값보다 크거나 같아야 합니다.");
+        }
 
         String destination = request.destination().trim();
         String companion = request.companion().trim();
         LocalTime activeStartTime = parseTimeOrDefault(request.activeStartTime(), DEFAULT_ACTIVE_START_TIME);
         LocalTime activeEndTime = parseTimeOrDefault(request.activeEndTime(), DEFAULT_ACTIVE_END_TIME);
+        // §3.3: 활동 시작 시간이 종료 시간보다 이르지 않으면 유효 범위가 없음
+        if (!activeStartTime.isBefore(activeEndTime)) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "활동 종료 시간은 시작 시간보다 늦어야 합니다.");
+        }
 
         AiItineraryPayload payload;
         try {
@@ -118,6 +132,24 @@ public class TripService {
             log.error("일정 생성 실패: destination={} durationDays={}", destination, durationDays, e);
             throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 일정 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
         }
+
+        return self.persistNewTrip(userId, request, destination, companion, durationDays,
+                activeStartTime, activeEndTime, payload);
+    }
+
+    /** 생성된 payload를 Trip/Day/Activity/Revision으로 영속화한다(§3.1: AI 호출과 분리된 짧은 쓰기 트랜잭션). */
+    @Transactional
+    public TripResponse persistNewTrip(
+            UUID userId,
+            TripCreateRequest request,
+            String destination,
+            String companion,
+            int durationDays,
+            LocalTime activeStartTime,
+            LocalTime activeEndTime,
+            AiItineraryPayload payload) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.AUTH_ERROR, "사용자를 찾을 수 없습니다."));
 
         OffsetDateTime now = OffsetDateTime.now();
         Trip trip = new Trip();
@@ -178,8 +210,35 @@ public class TripService {
         return response;
     }
 
-    @Transactional
+    /**
+     * 재조정 오케스트레이션. (1) 원본 로드+검증(읽기 트랜잭션) → (2) AI 재생성(트랜잭션 밖, §3.1) →
+     * (3) 영속화(쓰기 트랜잭션)로 3단 분리해 AI 응답 대기 동안 DB 커넥션을 잡지 않는다.
+     */
     public TripResponse reorder(UUID userId, UUID tripId, ReorderRequest request) {
+        ReorderContext ctx = self.loadReorderContext(userId, tripId, request);
+
+        AiDayPayload changedDayPayload;
+        try {
+            changedDayPayload =
+                    reorderGenerationService.generate(ctx.originalPayload(), ctx.day(), request.newActivityOrder());
+        } catch (AiCallException | AiParseException | PartialRegenerationViolationException e) {
+            log.error("재조정 실패: tripId={} day={}", tripId, ctx.day(), e);
+            throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 재조정에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        }
+
+        boolean flagged = routeWarningRuleChecker.isInefficient(changedDayPayload.activities());
+        String reason = null;
+        if (flagged) {
+            String aiReason = changedDayPayload.routeWarning() != null ? changedDayPayload.routeWarning().reason() : null;
+            reason = (aiReason != null && !aiReason.isBlank()) ? aiReason : RouteWarningRuleChecker.DEFAULT_REASON;
+        }
+
+        return self.persistReorder(userId, tripId, ctx.day(), changedDayPayload, flagged, reason);
+    }
+
+    /** 소유권/day/순서 검증을 마친 뒤 재생성 프롬프트에 넣을 원본 전체를 완전히 materialize해 반환한다. */
+    @Transactional(readOnly = true)
+    public ReorderContext loadReorderContext(UUID userId, UUID tripId, ReorderRequest request) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
         if (!trip.getUser().getId().equals(userId)) {
@@ -211,23 +270,22 @@ public class TripService {
             throw new ApiException(ErrorCode.VALIDATION_ERROR, "new_activity_order가 해당 day의 활동과 일치하지 않습니다.");
         }
 
-        AiItineraryPayload originalPayload =
-                new AiItineraryPayload(trip.getDestination(), trip.getDurationDays(), trip.getSummary(), originalDayPayloads);
+        AiItineraryPayload originalPayload = new AiItineraryPayload(
+                trip.getDestination(), trip.getDurationDays(), trip.getSummary(), originalDayPayloads);
+        return new ReorderContext(originalPayload, day);
+    }
 
-        AiDayPayload changedDayPayload;
-        try {
-            changedDayPayload = reorderGenerationService.generate(originalPayload, day, request.newActivityOrder());
-        } catch (AiCallException | AiParseException | PartialRegenerationViolationException e) {
-            log.error("재조정 실패: tripId={} day={}", tripId, day, e);
-            throw new ApiException(ErrorCode.GENERATION_FAILED, "AI 재조정에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    /** 검증된 changedDay 결과만 대상 day에 반영한다(다른 날짜는 손대지 않음). 짧은 쓰기 트랜잭션. */
+    @Transactional
+    public TripResponse persistReorder(
+            UUID userId, UUID tripId, int day, AiDayPayload changedDayPayload, boolean flagged, String reason) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN, "여행을 찾을 수 없습니다."));
+        if (!trip.getUser().getId().equals(userId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "이 여행에 접근할 권한이 없습니다.");
         }
-
-        boolean flagged = routeWarningRuleChecker.isInefficient(changedDayPayload.activities());
-        String reason = null;
-        if (flagged) {
-            String aiReason = changedDayPayload.routeWarning() != null ? changedDayPayload.routeWarning().reason() : null;
-            reason = (aiReason != null && !aiReason.isBlank()) ? aiReason : RouteWarningRuleChecker.DEFAULT_REASON;
-        }
+        ItineraryDay targetDay = itineraryDayRepository.findByTripIdAndDayNumber(tripId, day)
+                .orElseThrow(() -> new ApiException(ErrorCode.VALIDATION_ERROR, "day가 유효한 범위를 벗어났습니다."));
 
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -401,5 +459,9 @@ public class TripService {
             log.warn("activity time 파싱 실패, null로 대체: raw={}", raw);
             return null;
         }
+    }
+
+    /** 재조정 읽기 단계 산출물: 트랜잭션 밖 AI 호출에 필요한 원본 전체와 대상 day. */
+    public record ReorderContext(AiItineraryPayload originalPayload, int day) {
     }
 }
