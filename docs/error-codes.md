@@ -57,6 +57,7 @@
 | ERR_083 | 마지막 admin 삭제 불가 | 남은 admin이 1명일 때 삭제 차단 | 400 VALIDATION_ERROR |
 | ERR_084 | 존재하지 않는 사용자 | 관리자 대상 사용자 id 없음 | 400 VALIDATION_ERROR |
 | ERR_085 | 존재하지 않는 템플릿 | 관리자 대상 prompt_template id 없음 | 400 VALIDATION_ERROR |
+| ERR_086 | 존재하지 않는 템플릿 버전 | prompt_template_revisions에 해당 version 스냅샷 없음(조회/롤백) | 400 VALIDATION_ERROR |
 
 ## 로그 파일
 

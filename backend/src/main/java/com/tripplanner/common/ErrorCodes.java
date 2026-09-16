@@ -92,4 +92,6 @@ public final class ErrorCodes {
     public static final String ADMIN_USER_NOT_FOUND = "ERR_084";
     // ERR_085: 존재하지 않는 템플릿 — 관리자 대상 prompt_template id 없음
     public static final String ADMIN_TEMPLATE_NOT_FOUND = "ERR_085";
+    // ERR_086: 존재하지 않는 템플릿 버전 — prompt_template_revisions에 해당 version 스냅샷 없음(조회/롤백)
+    public static final String ADMIN_TEMPLATE_VERSION_NOT_FOUND = "ERR_086";
 }

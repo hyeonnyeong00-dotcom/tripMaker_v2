@@ -188,12 +188,58 @@ erDiagram
 
 - 최초 생성 요청에만 적용(재조정 요청은 캐시하지 않음 — PRD §6.8 참고).
 
+### 3.8 ai_call_log — AI 호출 사용량/비용 집계 (CLAUDE.md §5.6-a)
+| 컬럼 | 타입 | 제약 | 설명 |
+|---|---|---|---|
+| id | uuid | PK, default gen_random_uuid() | 식별자 |
+| trip_id | uuid | NULL, FK trips(id) ON DELETE SET NULL | 재조정은 실제 trip, 최초 생성은 저장 전이라 NULL |
+| template_name | text | NULL 허용 | 사용한 템플릿 이름(캐시 히트는 NULL) |
+| template_version | int | NULL 허용 | 템플릿 버전 |
+| cache_hit | boolean | NOT NULL, default false | 캐시 히트 여부(히트율 계산) |
+| input_tokens | int | NOT NULL, default 0 | 입력 토큰(캐시 히트/실패는 0) |
+| output_tokens | int | NOT NULL, default 0 | 출력 토큰 |
+| cost_estimate | numeric(10,4) | NOT NULL, default 0 | 예상 비용 USD(AiCostCalculator 단가 상수로 산출) |
+| duration_ms | int | NOT NULL, default 0 | 소요 시간 |
+| success | boolean | NOT NULL, default false | 성공 여부 |
+| error_code | text | NULL 허용 | 실패 시 ERR_xxx |
+| created_at | timestamptz | NOT NULL, default now() | 호출 시각 |
+
+- 파일 로그(`logs/ai-usage.log`)와 같은 정보를 DB에도 적재한다. 대시보드는 파일을 파싱하지 않고 이 테이블만 집계한다.
+- 캐시 히트도 호출 1건으로 적재하되 토큰·비용은 0이다.
+
+### 3.9 error_log — 에러 응답 집계 (CLAUDE.md §5.6-a)
+| 컬럼 | 타입 | 제약 | 설명 |
+|---|---|---|---|
+| id | uuid | PK, default gen_random_uuid() | 식별자 |
+| error_code | text | NOT NULL | 세분화 코드(ERR_xxx) |
+| error_category | text | NOT NULL | 대분류(응답의 error 필드와 동일) |
+| message | text | NULL 허용 | 클라이언트에 노출한 메시지(최대 500자) |
+| path | text | NULL 허용 | 요청 경로 |
+| created_at | timestamptz | NOT NULL, default now() | 발생 시각 |
+
+- `GlobalExceptionHandler`의 응답 생성 지점 한 곳에서만 적재한다(코드 곳곳에 분산 금지).
+- **보안:** 스택트레이스·요청 본문은 저장하지 않는다.
+
+### 3.10 prompt_template_revisions — 템플릿 버전 스냅샷 (CLAUDE.md §5.6-a)
+| 컬럼 | 타입 | 제약 | 설명 |
+|---|---|---|---|
+| id | uuid | PK, default gen_random_uuid() | 식별자 |
+| template_id | uuid | NOT NULL, FK prompt_templates(id) ON DELETE CASCADE | 대상 템플릿 |
+| version | int | NOT NULL, UNIQUE(template_id, version) | 스냅샷 당시 버전(덮어쓰기 전 버전) |
+| content | text | NOT NULL | 그 버전의 프롬프트 본문 |
+| created_at | timestamptz | NOT NULL, default now() | 스냅샷 시각 |
+
+- 저장(PUT)과 롤백 모두 덮어쓰기 **직전에** 1행 적재한다. 롤백은 과거 내용으로 새 버전을 만들고 번호는 항상 증가한다.
+
 ## 4. 관계 요약
 - users 1 : N trips — 한 사용자가 여러 여행을 저장
 - trips 1 : N itinerary_days — 여행 하나에 여러 일자
 - itinerary_days 1 : N itinerary_activities — 하루에 여러 활동
 - trips 1 : N trip_revisions — 재조정할 때마다 이력 적재
 - prompt_templates, ai_response_cache는 FK 없이 독립 테이블
+- trips 1 : N ai_call_log — 재조정 호출 기록(최초 생성은 trip_id NULL, trip 삭제 시 SET NULL)
+- prompt_templates 1 : N prompt_template_revisions — 저장/롤백 직전 스냅샷(템플릿 삭제 시 CASCADE)
+- error_log는 FK 없이 독립 테이블
 
 ## 5. 인덱스 제안
 - trips(user_id) — 사용자별 저장 목록 조회(최신순 정렬은 updated_at 또는 created_at 기준)
@@ -202,6 +248,10 @@ erDiagram
 - itinerary_days(route_warning_flagged) — 관리자 품질 모니터링 목록 필터링
 - itinerary_activities(itinerary_day_id, order_index) — UNIQUE 인덱스 겸용
 - ai_response_cache(cache_key) — UNIQUE 인덱스(조회 성능)
+- ai_call_log(created_at DESC) — 요약/일별 추이 집계가 기간으로 자르므로
+- error_log(created_at DESC) — 최근 에러 목록 정렬
+- error_log(error_code) — 코드별 발생 횟수 GROUP BY
+- prompt_template_revisions(template_id, version DESC) — 버전 목록 조회
 
 ## 6. 제약사항 및 향후 고려사항
 - 동시 편집 충돌은 이번 범위에서 락 없이 마지막 저장이 덮어쓰는 방식(PRD §10, 비목표)이므로 낙관적 락(버전 컬럼 비교) 등은 도입하지 않는다.
