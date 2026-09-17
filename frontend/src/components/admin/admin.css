@@ -616,3 +616,52 @@
     height: 220px;
   }
 }
+
+/* 최근 에러 표: 가로 스크롤 없이 경로 열까지 한 화면에 들어오도록 열 폭 고정 + 긴 메시지는 말줄임 */
+.ad-errors-table {
+  table-layout: fixed;
+}
+
+.ad-errors-table th,
+.ad-errors-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-errors-table th:nth-child(1),
+.ad-errors-table td:nth-child(1) {
+  width: 124px;
+}
+
+.ad-errors-table th:nth-child(2),
+.ad-errors-table td:nth-child(2) {
+  width: 84px;
+}
+
+.ad-errors-table th:nth-child(3),
+.ad-errors-table td:nth-child(3) {
+  width: 170px;
+}
+
+.ad-errors-table th:nth-child(5),
+.ad-errors-table td:nth-child(5) {
+  width: 168px;
+}
+
+/* 메시지 열(4번째)은 남는 폭을 차지하되 잘릴 땐 말줄임 — 전문은 title 툴팁으로 확인 */
+.ad-errors-table td.ad-table-reason {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .ad-errors-table {
+    table-layout: auto;
+  }
+
+  .ad-errors-table th,
+  .ad-errors-table td {
+    white-space: nowrap;
+  }
+}

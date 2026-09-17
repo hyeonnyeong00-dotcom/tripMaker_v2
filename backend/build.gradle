@@ -37,3 +37,9 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// 로컬 실행 힙 상한. 미지정 시 JVM 기본 최대 힙이 물리 메모리의 25%(16GB 머신 → 약 4GB)로 잡혀
+// 개발 머신에서 불필요하게 큰 몫을 차지한다. 이 앱은 실사용 RSS가 200MB 미만이라 512MB로 충분하다.
+tasks.named('bootRun') {
+	jvmArgs = ['-Xms256m', '-Xmx512m']
+}
