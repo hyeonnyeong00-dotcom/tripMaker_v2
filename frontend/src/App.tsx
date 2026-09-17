@@ -7,6 +7,8 @@ import TripItineraryPage from './pages/TripItineraryPage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminTripDetailPage from './pages/admin/AdminTripDetailPage'
+import AdminAiUsagePage from './pages/admin/AdminAiUsagePage'
+import AdminErrorsPage from './pages/admin/AdminErrorsPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
@@ -55,6 +57,22 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminTripDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ai-usage"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminAiUsagePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/errors"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminErrorsPage />
             </ProtectedRoute>
           }
         />

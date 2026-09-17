@@ -1,10 +1,14 @@
 import { apiClient } from './client'
 import type {
   AdminUser,
+  AiUsageDailyResponse,
+  AiUsageSummary,
   AppSettingResponse,
   DestinationStatsResponse,
+  ErrorSummaryResponse,
   FlaggedTripsResponse,
   PromptTemplate,
+  RecentErrorsResponse,
 } from '../types/admin'
 
 export async function getFlaggedTrips(): Promise<FlaggedTripsResponse> {
@@ -52,5 +56,25 @@ export async function getResetPasswordSetting(): Promise<AppSettingResponse> {
 
 export async function updateResetPasswordSetting(value: string): Promise<AppSettingResponse> {
   const { data } = await apiClient.put<AppSettingResponse>('/api/admin/settings/reset-password', { value })
+  return data
+}
+
+export async function getAiUsageSummary(): Promise<AiUsageSummary> {
+  const { data } = await apiClient.get<AiUsageSummary>('/api/admin/ai-usage/summary')
+  return data
+}
+
+export async function getAiUsageDaily(days: number): Promise<AiUsageDailyResponse> {
+  const { data } = await apiClient.get<AiUsageDailyResponse>('/api/admin/ai-usage/daily', { params: { days } })
+  return data
+}
+
+export async function getErrorSummary(): Promise<ErrorSummaryResponse> {
+  const { data } = await apiClient.get<ErrorSummaryResponse>('/api/admin/errors/summary')
+  return data
+}
+
+export async function getRecentErrors(limit: number): Promise<RecentErrorsResponse> {
+  const { data } = await apiClient.get<RecentErrorsResponse>('/api/admin/errors/recent', { params: { limit } })
   return data
 }

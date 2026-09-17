@@ -5,6 +5,8 @@ import './admin.css'
 
 const MENU = [
   { to: '/admin', label: '대시보드', end: true },
+  { to: '/admin/ai-usage', label: 'AI 사용량', end: false },
+  { to: '/admin/errors', label: '에러 모니터링', end: false },
   { to: '/admin/admins', label: '관리자 관리', end: false },
   { to: '/admin/users', label: '사용자 관리', end: false },
   { to: '/admin/settings', label: '비밀번호 초기화 설정', end: false },

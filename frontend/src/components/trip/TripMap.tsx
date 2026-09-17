@@ -10,7 +10,10 @@ interface Props {
 
 const DEFAULT_CENTER = { lat: 37.5665, lng: 126.978 }
 
-function buildMarkerIcon(index: number, core: typeof google.maps.CoreLibrary): google.maps.Icon {
+/** useMapsLibrary('core')가 돌려주는 객체 중 여기서 실제로 쓰는 생성자만 구조적으로 명시한다. */
+type CoreConstructors = { Size: typeof google.maps.Size; Point: typeof google.maps.Point }
+
+function buildMarkerIcon(index: number, core: CoreConstructors): google.maps.Icon {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">
     <circle cx="16" cy="16" r="14" fill="#0062F4" stroke="white" stroke-width="2"/>
     <text x="16" y="21" font-size="14" font-family="sans-serif" font-weight="700" fill="white" text-anchor="middle">${index}</text>
