@@ -52,13 +52,13 @@ public class AiUsageLogger {
                 elapsedMs, success, errorCode);
     }
 
-    /** 캐시 히트로 AI를 호출하지 않은 경우 1줄. 토큰 0, 템플릿 미사용. */
-    public void logCacheHit(String tripId) {
-        usageLog.info("trip_id={} | template=- v0 | cache_hit=true | in_tokens=0 out_tokens=0 | elapsed_ms=0 | success=true",
-                nullSafe(tripId));
+    /** 캐시 히트로 AI를 호출하지 않은 경우 1줄. 토큰 0, 템플릿 미사용. elapsedMs = 캐시 조회 실측 시간. */
+    public void logCacheHit(String tripId, long elapsedMs) {
+        usageLog.info("trip_id={} | template=- v0 | cache_hit=true | in_tokens=0 out_tokens=0 | elapsed_ms={} | success=true",
+                nullSafe(tripId), elapsedMs);
 
         // §5.6-a: 캐시 히트도 호출 1건으로 카운트하되 토큰/비용은 0(히트율 계산용).
-        persist(tripId, null, null, true, 0, 0, BigDecimal.ZERO, 0L, true, null);
+        persist(tripId, null, null, true, 0, 0, BigDecimal.ZERO, elapsedMs, true, null);
     }
 
     /**

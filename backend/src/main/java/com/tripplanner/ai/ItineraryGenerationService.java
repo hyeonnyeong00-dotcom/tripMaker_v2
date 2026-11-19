@@ -97,11 +97,13 @@ public class ItineraryGenerationService {
                 activeStartTime,
                 activeEndTime);
 
+        long lookupStartNanos = System.nanoTime();
         Optional<AiItineraryPayload> cached = cacheService.lookup(cacheKey);
         if (cached.isPresent()) {
             log.info("AI 응답 캐시 히트, AI 미호출. cacheKey={}", cacheKey);
-            // 초기 생성은 이 시점에 trip이 아직 없어 trip_id는 "-"로 기록한다
-            aiUsageLogger.logCacheHit(null);
+            // 초기 생성은 이 시점에 trip이 아직 없어 trip_id는 "-"로 기록한다.
+            // duration_ms = 캐시 조회+역직렬화 실측 시간(미스의 AI 호출 구간과 비교 가능하도록).
+            aiUsageLogger.logCacheHit(null, elapsedMs(lookupStartNanos));
             return cached.get();
         }
         log.info("AI 응답 캐시 미스, AI 직접 호출 진행. cacheKey={}", cacheKey);
