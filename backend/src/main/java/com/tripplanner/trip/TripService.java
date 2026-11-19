@@ -177,8 +177,11 @@ public class TripService {
             day.setTrip(trip);
             day.setDayNumber(dayPayload.day());
             day.setTheme(dayPayload.theme());
-            day.setRouteWarningFlagged(dayPayload.routeWarning() != null && dayPayload.routeWarning().flagged());
-            day.setRouteWarningReason(dayPayload.routeWarning() != null ? dayPayload.routeWarning().reason() : null);
+            // §5.2: 재조정과 동일하게 룰로 flagged 판정, 사유만 AI 자연어 사용(캐시 히트 payload에도 동일 적용)
+            RouteWarningRuleChecker.Judgement judgement =
+                    routeWarningRuleChecker.judge(dayPayload.activities(), dayPayload.routeWarning());
+            day.setRouteWarningFlagged(judgement.flagged());
+            day.setRouteWarningReason(judgement.reason());
             day.setLastModifiedAt(null);
             day = itineraryDayRepository.save(day);
 
@@ -227,14 +230,10 @@ public class TripService {
             throw new ApiException(ErrorCode.GENERATION_FAILED, ErrorCodes.REORDER_FAILED, "AI 재조정에 실패했습니다. 잠시 후 다시 시도해주세요.");
         }
 
-        boolean flagged = routeWarningRuleChecker.isInefficient(changedDayPayload.activities());
-        String reason = null;
-        if (flagged) {
-            String aiReason = changedDayPayload.routeWarning() != null ? changedDayPayload.routeWarning().reason() : null;
-            reason = (aiReason != null && !aiReason.isBlank()) ? aiReason : RouteWarningRuleChecker.DEFAULT_REASON;
-        }
+        RouteWarningRuleChecker.Judgement judgement =
+                routeWarningRuleChecker.judge(changedDayPayload.activities(), changedDayPayload.routeWarning());
 
-        return self.persistReorder(userId, tripId, ctx.day(), changedDayPayload, flagged, reason);
+        return self.persistReorder(userId, tripId, ctx.day(), changedDayPayload, judgement.flagged(), judgement.reason());
     }
 
     /** 소유권/day/순서 검증을 마친 뒤 재생성 프롬프트에 넣을 원본 전체를 완전히 materialize해 반환한다. */

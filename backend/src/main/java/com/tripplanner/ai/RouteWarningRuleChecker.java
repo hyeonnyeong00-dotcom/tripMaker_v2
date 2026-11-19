@@ -1,6 +1,7 @@
 package com.tripplanner.ai;
 
 import com.tripplanner.ai.dto.AiActivityPayload;
+import com.tripplanner.ai.dto.AiRouteWarningPayload;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,22 @@ public class RouteWarningRuleChecker {
     private static final double MAX_LEG_DISTANCE_KM = 8.0;
 
     public static final String DEFAULT_REASON = "이동 거리가 길어 동선이 비효율적일 수 있어요";
+
+    /** 룰 판정 결과. 최초 생성·재조정 두 경로가 그대로 itinerary_days 두 컬럼에 저장한다. */
+    public record Judgement(boolean flagged, String reason) {
+    }
+
+    /**
+     * 최초 생성·재조정 공통 판정(§5.2). flagged는 룰로만 정하고 AI의 flagged 값은 쓰지 않는다.
+     * flagged=true일 때만 AI 자연어 사유를 쓰며(비어 있으면 DEFAULT_REASON), false면 reason=null.
+     */
+    public Judgement judge(List<AiActivityPayload> activitiesInOrder, AiRouteWarningPayload aiRouteWarning) {
+        if (!isInefficient(activitiesInOrder)) {
+            return new Judgement(false, null);
+        }
+        String aiReason = aiRouteWarning != null ? aiRouteWarning.reason() : null;
+        return new Judgement(true, (aiReason != null && !aiReason.isBlank()) ? aiReason : DEFAULT_REASON);
+    }
 
     /** 활동 순서(activitiesInOrder) 상 연속된 두 지점 중 하나라도 임계 거리를 넘으면 flagged=true. */
     public boolean isInefficient(List<AiActivityPayload> activitiesInOrder) {
